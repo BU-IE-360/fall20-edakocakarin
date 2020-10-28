@@ -1,0 +1,26 @@
+---
+title: "Interesting Forecasting Applications with R"
+author: "Eda Kocakarin - IE360 - Fall 2020"
+---
+```{r,echo=FALSE,results="hide"}
+library(knitr)
+opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
+```
+
+1. [Time series forecasting using ARIMA models](https://blogs.oracle.com/datascience/introduction-to-forecasting-with-arima-in-r)
+
+    This example is important because it introduces the forecasting methodology using ARIMA models in R. The steps are:
+    
+    + 1. Examine your data
+   +  2. Decompose your data
+   + 3. Stationarity
+   + 4. Autocorrelations and choosing model order
+   + 5. Fit an ARIMA model
+   + 6. Evaluate and iterate
+    
+
+2. Forecasting with Simple Linear Regression
+3. Simple Exponential Smoothing Technique in R (SES)
+4. Hidden Markov
+
+
