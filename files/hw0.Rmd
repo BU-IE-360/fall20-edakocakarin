@@ -19,7 +19,12 @@ opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
    + 6. Evaluate and iterate
     
 
-2. Forecasting with Simple Linear Regression
+2. [Forecasting with Simple Linear Regression] (https://library.tradingtechnologies.com/trade/chrt-ti-linear-regression-forecast.html)
+
+
+   Linear regression which is statistical tool used to help predict unknown values from known values is the most common fundamental type of R analysis. The main aim is predicting the value of a single numeric variable based on one or more variables that can be either numeric or categorical. 
+   
+   
 3. Simple Exponential Smoothing Technique in R (SES)
 4. Hidden Markov
 
