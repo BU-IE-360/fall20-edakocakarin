@@ -11,21 +11,42 @@ opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
 
     This example is important because it introduces the forecasting methodology using ARIMA models in R. The steps are:
     
-    + 1. Examine your data
-   +  2. Decompose your data
-   + 3. Stationarity
-   + 4. Autocorrelations and choosing model order
-   + 5. Fit an ARIMA model
-   + 6. Evaluate and iterate
+   + Examine your data
+   + Decompose your data
+   + Stationarity
+   + Autocorrelations and choosing model order
+   + Fit an ARIMA model
+   + Evaluate and iterate
     
 
-2. [Forecasting with Simple Linear Regression] (https://library.tradingtechnologies.com/trade/chrt-ti-linear-regression-forecast.html)
+2. [Forecasting with Simple Linear Regression](http://r-statistics.co/Linear-Regression.html)
 
+   Linear regression that is used to help predict the value of an outcome variable Y based on one or more input predictor variables X is a common statistical tool. The main aim is predicting the value of a single numeric variable based on one or more variables that can be either numeric or categorical. It is important to establish a good linear relationship (a mathematical formula) between the predictor variable(s) and the response variable. Therefore, we can use this formula to estimate the value of the response Y which is called a dependent variable, when only the predictors (Xs) that is called independent values are known. This mathematical equation can be generalized as follows:
+   
+   Y=β1+β2X+ϵ
 
-   Linear regression which is statistical tool used to help predict unknown values from known values is the most common fundamental type of R analysis. The main aim is predicting the value of a single numeric variable based on one or more variables that can be either numeric or categorical. 
++ β1 is the intercept
++ β2 is the slope
++ ϵ is the error term
+
+3. [Exponential Smoothing Technique](https://www.geeksforgeeks.org/exponential-smoothing-in-r-programming/)
+
+   Exponential smoothing is a time series forecasting method for univariate data that can be extended to support data with a systematic trend or seasonal component. Unlike simple average method, in exponential smoothing of time series data assings exponentially decreasing weights for newest to oldest observations. This means that, the lighter values correspond to older observations, while heavier values reflect recent observations. This intuitional method is computationally efficient and generally can be applied on a wide or huge range of time series. There are many types of exponential smoothing technique based on the trends and seasonality, which are as follows:
+
++ Simple Exponential Smoothing 
++ Holt’s Trend-Corrected Double Exponential Smoothing
++ Triple Exponential Smoothing (the Multiplicative Holt-Winters) 
++ Damped Trend method
    
+4. [Neural Network for Forecasting](https://otexts.com/fpp2/nnetar.html)
+
+   A neural network can be thought of as a network of “neurons” which are organised in layers such as input layer, hidden layer and output layer. In the simplest neural networks, the input layer symbolizes predictors and the output layer forms forecast and there is no hidden layers. The forecasts are obtained by a linear combination of the inputs.In addition to input and output layer, if we add intermediate layer with hidden neurons, network becomes nonlinear and complex form. The outputs of the nodes in one layer are inputs to the next layer. Neural Network is used for many examples such as forecasting potential energy surfaces and predicting sunspots.
    
-3. Simple Exponential Smoothing Technique in R (SES)
-4. Hidden Markov
+      ![](/Users/edakocakarin/Desktop/fall'20/neuralnetwork.png)
+      
+5. [Simple Moving Average](https://www.statisticshowto.com/moving-average/)
+
+   A moving average is a technique to get an overall idea of the trends in a data set; it is an average of any subset of numbers. The moving average is extremely useful for forecasting long-term trends. You can calculate it for any period of time. For example, if you have sales data for a ten-year period, you can calculate a three-year moving average, a four-year moving average, a five-year moving average and so on. The “middling” value of a set of numbers means an average. The moving average is exactly the same, but the average is calculated several times for several subsets of data. For example, if you want a two-year moving average for a data set from 1990, 1991, 1992 and 1993 you would find averages for the subsets 1990/1991, 1991/1992 and 1992/1993. Moving averages are usually plotted and are best visualized.
+   
 
 
