@@ -33,6 +33,7 @@ hist(secondhandauto$`2020,00`, main = "2nd Hand Online Automative Market in 2020
 
 ```
 
+
 ## Boxplots of Search Analysis of 'İkinci El Araba' in Google Search vs. 2nd Hand Online Automative Market in 2018
 
 Since the short time interval data taken from Google Trends is weekly and I have categorized the search datas by months in order to compare them with the monthly data I received from the OOD's website.
@@ -59,6 +60,7 @@ ggplot(secondhandauto, aes(x=AY,y=`2018,00`,group=AY) )+
 
 ```
 
+
 ## Boxplots of Search Analysis of 'İkinci El Araba' in Google Search vs. 2nd Hand Online Automative Market in 2019
 
 Here are the boxplots of 2019 for search analysis of 'ikinci el araba' and also second hand car sales. In general, it can be said that the graphs of the two data are related to each other. The similarity between the graphics is very visible, especially in summer.
@@ -79,6 +81,7 @@ ggplot(secondhandauto, aes(x=AY,y=`2019,00`,group=AY) )+
        y = "Amount of Sales") +
   theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+theme(plot.title = element_text(size = 15, hjust = 0.5))
 ```
+
 
 ## Boxplots of Search Analysis of 'İkinci El Araba' in Google Search vs. 2nd Hand Online Automative Market in 2020
 
@@ -114,6 +117,7 @@ dollarrate =read_excel("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin
 dollarsearch=read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/DolarGoogle2012-2019.csv")
 
 ```
+
 
 ## A Histogram of Dollar Exchange Rate from 2012 to 2019
 
@@ -169,6 +173,7 @@ fiyat=sigara$`SigaraFiyatı`
 Yıl=sigara$Yıl
 ```
 
+
 ## A Histogram of Average Cigarette Price in Turkey from 2013-01 to 2020-06
 
 Below you can find the histogram graph of the monthly average cigarette sales prices I found from January 2013 to June 2020.
@@ -178,6 +183,7 @@ hist(sigara$`SigaraFiyatı`, main = "Monthly Average Cigarette Price in Turkey f
 
 
 ```
+
 
 ## Boxplots of Search Analysis of 'sigara vergisi' & 'özel tüketim vergisi' in Google Search vs. Monthly Average Cigarette Price in Turkey from 2013-01 to 2020-06
 
@@ -209,6 +215,7 @@ ggplot(sigara, aes(x=Yıl, y=fiyat,group=Yıl) )+
 
 
 ```
+
 
 #### References
 
