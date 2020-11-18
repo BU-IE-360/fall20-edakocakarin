@@ -133,20 +133,20 @@ I thought there might be a relationship between the increase in the dollar rate 
 
 
 ```{r boxplots of dollar 2012-2019, echo=FALSE}
-ggplot(dollarsearch, aes(x=Tarih, y=Sayı,group=Yıl) )+
+ggplot(dollarsearch, aes(x=Yıl, y=Sayı,group=Yıl) )+
   geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="paleturquoise",high="paleturquoise4")+
   labs(title ="Search Analysis of 'Dolar Kaç' in Google Search", 
-       x = "Months over 2012-2019",
+       x = "Years over 2012-2019",
        y = "Amount of search") +
-  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
 
 
-ggplot(dollarrate, aes(x=Tarih,y=`USD/TL`,group=Yıl) )+
-  geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="wheat",high="wheat4")+
+ggplot(dollarrate, aes(x=Yıl,y=`USD/TL`,group=Yıl) )+
+  geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="wheat",high="black")+
   labs(title ="Dollar Exchange Rate in Turkey from 2012 to 2019", 
-       x = "Months over 2012-2019",
+       x = "Years over 2012-2019",
        y = "Dollar Exchange Rate") +
-  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1)) +theme(plot.title = element_text(size = 15, hjust = 0.5))
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1)) +theme(plot.title = element_text(size = 15, hjust = 0.5))
 
 ```
 
@@ -186,26 +186,26 @@ The data I used was monthly from 2013-01 to 2020-06. Instead of plotting all of 
 Below you can find boxplots of google trends 'sigara vergisi' & 'özel tüketim vergisi' datas and cigarette prices taken from 2013-01 to 2020-06. 
 
 ```{r boxplots of sigara, echo=FALSE}
-ggplot(sigaravergisi, aes(x=Ay, y=Sayı,group=Yıl) )+
+ggplot(sigaravergisi, aes(x=Yıl, y=Sayı,group=Yıl) )+
   geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="paleturquoise",high="paleturquoise4")+
   labs(title ="Search Analysis of 'sigara vergisi' in Google Search", 
-       x = "Months over 2013 January-2020 June",
+       x = "Years over 2013 January-2020 June",
        y = "Amount of search") +
-  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
 
-ggplot(ozeltuketimvergisi, aes(x=Ay, y=Sayı,group=Yıl) )+
+ggplot(ozeltuketimvergisi, aes(x=Yıl, y=Sayı,group=Yıl) )+
   geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="paleturquoise",high="paleturquoise4")+
   labs(title ="Search Analysis of 'özel tüketim vergisi' in Google Search", 
-       x = "Months over 2013 January-2020 June",
+       x = "Years over 2013 January-2020 June",
        y = "Amount of search") +
-  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
 
-ggplot(sigara, aes(x=Tarih, y=fiyat,group=Yıl) )+
+ggplot(sigara, aes(x=Yıl, y=fiyat,group=Yıl) )+
   geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="paleturquoise",high="paleturquoise4")+
   labs(title ="Monthly Average Cigarette Price in Turkey from 2013-01 to 2020-06", 
-       x = "Months over 2013 January-2020 June",
+       x = "Years over 2013 January-2020 June",
        y = "Average Price of Cigarette") +
-  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
 
 
 ```
