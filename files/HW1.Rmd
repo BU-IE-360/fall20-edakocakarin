@@ -1,0 +1,227 @@
+---
+title: "HW1"
+author: "Eda Kocakarin  - IE360 - Fall 2020"
+date: "11/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(readxl)
+secondhandauto =read_excel("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/2araba.xlsx")
+car18=read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/multiTimeline-3.csv")
+secondhandauto$AY=as.character(secondhandauto$AY)
+secondhandauto$AY <- factor(secondhandauto$AY, levels=unique(secondhandauto$AY))
+car19=read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/multiTimeline-2.csv")
+car20=read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files//multiTimeline.csv")
+```
+#  Data Visualization and Google Trends on Three Different Measures from Turkey
+
+# 1) Monthly 2nd Hand Online Automative Market of Turkey over 2018-2020
+
+First of all, there are monthly datas of second hand online automative markets that taken from OOD's (Otomativ Distribütörleri Derneği) website. Below you can find the histograms of these data from 2018 to 2020, categorized by years.
+
+##        Histograms of 2nd Hand Online Automative Market from 2018 to 2020
+
+```{r histogram secondhandauto, echo=FALSE, include=TRUE}
+hist(secondhandauto$`2018,00`, main = "2nd Hand Online Automative Market in 2018", xlab="Amount of Sales",ylab="Count", col="pink", border = "white")
+
+hist(secondhandauto$`2019,00`, main = "2nd Hand Online Automative Market in 2019", xlab="Amount of Sales",ylab="Count", col="turquoise3", border = "white")
+
+hist(secondhandauto$`2020,00`, main = "2nd Hand Online Automative Market in 2020", xlab="Amount of Sales",ylab="Count", col="purple", border = "white")
+
+```
+
+## Boxplots of Search Analysis of 'İkinci El Araba' in Google Search vs. 2nd Hand Online Automative Market in 2018
+
+Since the short time interval data taken from Google Trends is weekly and I have categorized the search datas by months in order to compare them with the monthly data I received from the OOD's website.
+
+I predicted that there was a relationship between second hand online car sales data and the 'ikinci el araba' searches I took from google trends. For this reason, I had the boxplots drawn by months and compared them.
+
+```{r boxplots of 2018, echo=FALSE}
+ggplot(car18, aes(x=Hafta, y=Sayı, group=Ay) )+
+  geom_boxplot(aes(fill=Ay))+scale_fill_gradient(low="pink",high="pink4")+
+  labs(title ="Search Analysis of 'İkinci El Araba' in Google Search", 
+       x = "Weeks of 2018",
+       y = "Amount of search") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+
+ggplot(secondhandauto, aes(x=AY,y=`2018,00`,group=AY) )+
+  geom_boxplot()+scale_fill_gradient(low="pink",high="pink4")+
+  labs(title ="2nd Hand Online Automative Market in 2018", 
+       x = "Months of 2018",
+       y = "Amount of Sales") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+
+
+```
+
+## Boxplots of Search Analysis of 'İkinci El Araba' in Google Search vs. 2nd Hand Online Automative Market in 2019
+
+Here are the boxplots of 2019 for search analysis of 'ikinci el araba' and also second hand car sales. In general, it can be said that the graphs of the two data are related to each other. The similarity between the graphics is very visible, especially in summer.
+
+```{r boxplots of 2019, echo=FALSE}
+ggplot(car19, aes(x=Hafta, y=Sayı, group=Ay) )+
+  geom_boxplot(aes(fill= Ay) )+scale_fill_gradient(low="paleturquoise",high="turquoise4")+
+  labs(title ="Search Analysis of 'İkinci El Araba' in Google Search", 
+       x = "Weeks of 2019",
+       y = "Amount of Sales") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+ggplot(secondhandauto, aes(x=AY,y=`2019,00`,group=AY) )+
+  geom_boxplot()+scale_fill_gradient(low="paleturquoise",high="turquoise4")+
+  labs(title ="2nd Hand Online Automative Market in 2019", 
+       x = "Months of 2019",
+       y = "Amount of Sales") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+theme(plot.title = element_text(size = 15, hjust = 0.5))
+```
+
+## Boxplots of Search Analysis of 'İkinci El Araba' in Google Search vs. 2nd Hand Online Automative Market in 2020
+
+Here are the boxplots of 2020 for search analysis of 'ikinci el araba' and also second hand car sales. 
+
+```{r boxplots of 2020, echo=FALSE}
+ggplot(car20, aes(x=Hafta, y=Sayı, group=Ay) )+scale_fill_gradient(low="thistle1",high="purple4")+
+  geom_boxplot(aes(fill= Ay) )+
+  labs(title ="Search Analysis of 'İkinci El Araba' in Google Search", 
+       x = "Weeks of 2020",
+       y = "Amount of search") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+ggplot(secondhandauto, aes(x=AY,y=`2020,00`,group=AY) )+
+  geom_boxplot()+scale_fill_gradient(low="thistle1",high="purple4")+
+  labs(title ="2nd Hand Online Automative Market in 2020", 
+       x = "Months of 2020",
+       y = "Amount of Sales") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+```
+
+In general, it can be said that the graphs of the two data are related to each other. The similarity between the graphics is very visible, especially in summer.
+
+
+# 2) Monthly Dollar Exchange Rate in Turkey over 2012-2019
+
+```{r setup2, include=FALSE}
+
+dollarrate =read_excel("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/Dolarkur2012-2019.xlsx")
+
+dollarsearch=read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/DolarGoogle2012-2019.csv")
+
+```
+
+## A Histogram of Dollar Exchange Rate from 2012 to 2019
+
+
+In this study, I wanted to observe the change in the dollar exchange rate with time. Dollar exchange rate from 2012 to 2019 has generally increased. This is the histogram of dollar exchange rate from 2012 to 2019.
+
+```{r histogram dollarrate, echo=FALSE, include=TRUE}
+hist(dollarrate$`USD/TL`, main = "Dollar Exchange Rate from 2012 to 2019", xlab="USD/TL",ylab="Count", col="plum3", border = "white")
+
+
+```
+
+## Boxplots of Search Analysis of 'Dolar Kaç' in Google Search vs. Dollar Exchange Rate in Turkey from 2012 to 2019
+
+
+I thought there might be a relationship between the increase in the dollar rate over time and 'dolar kaç' google searches. I visualized these in order to understand that people who are investing, willing, or interested in the economy, search for 'dolar kaç' during the day parallels the increase in dollar. 
+
+
+```{r boxplots of dollar 2012-2019, echo=FALSE}
+ggplot(dollarsearch, aes(x=Tarih, y=Sayı,group=Yıl) )+
+  geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="paleturquoise",high="paleturquoise4")+
+  labs(title ="Search Analysis of 'Dolar Kaç' in Google Search", 
+       x = "Months over 2012-2019",
+       y = "Amount of search") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+
+ggplot(dollarrate, aes(x=Tarih,y=`USD/TL`,group=Yıl) )+
+  geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="wheat",high="wheat4")+
+  labs(title ="Dollar Exchange Rate in Turkey from 2012 to 2019", 
+       x = "Months over 2012-2019",
+       y = "Dollar Exchange Rate") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1)) +theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+```
+
+
+
+I categorized the two different datasets by year, withdrawing the search data between 2012 and 2019 from Google Trends and the dollar rate from the required places monthly. I chose to draw the boxplots by year to facilitate the comparison and make the monthly data more understandable.
+
+# 3) Monthly Average Cigarette Price in Turkey from 2013-01 to 2020-06
+
+The price of cigarettes sold in Turkey has been increasing for a long time. 
+For this reason, I collected data to investigate the increasing cigarette prices I was curious about and to reveal its relationship with the searches for 'sigara vergisi' & 'özel tüketim vergisi'.
+
+```{r setup3, include=FALSE}
+
+library(lubridate)
+sigara =read_excel("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/sigarafiyat.xlsx")
+sigaravergisi=read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/sigaravergisi.csv")
+ozeltuketimvergisi=read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/ozeltuketimvergisi.csv")
+fiyat=sigara$`SigaraFiyatı`
+Yıl=sigara$Yıl
+```
+
+## A Histogram of Average Cigarette Price in Turkey from 2013-01 to 2020-06
+
+Below you can find the histogram graph of the monthly average cigarette sales prices I found from January 2013 to June 2020.
+
+```{r histogram sigara, echo=FALSE, include=TRUE}
+hist(sigara$`SigaraFiyatı`, main = "Monthly Average Cigarette Price in Turkey from 2013-01 to 2020-06", xlab="Cigarettes Price",ylab="Count", col="pink", border = "white")
+
+
+```
+
+## Boxplots of Search Analysis of 'sigara vergisi' & 'özel tüketim vergisi' in Google Search vs. Monthly Average Cigarette Price in Turkey from 2013-01 to 2020-06
+
+The data I used was monthly from 2013-01 to 2020-06. Instead of plotting all of them monthly, I converted the monthly data into annual data cumulatively.
+
+Below you can find boxplots of google trends 'sigara vergisi' & 'özel tüketim vergisi' datas and cigarette prices taken from 2013-01 to 2020-06. 
+
+```{r boxplots of sigara, echo=FALSE}
+ggplot(sigaravergisi, aes(x=Ay, y=Sayı,group=Yıl) )+
+  geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="paleturquoise",high="paleturquoise4")+
+  labs(title ="Search Analysis of 'sigara vergisi' in Google Search", 
+       x = "Months over 2013 January-2020 June",
+       y = "Amount of search") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+ggplot(ozeltuketimvergisi, aes(x=Ay, y=Sayı,group=Yıl) )+
+  geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="paleturquoise",high="paleturquoise4")+
+  labs(title ="Search Analysis of 'özel tüketim vergisi' in Google Search", 
+       x = "Months over 2013 January-2020 June",
+       y = "Amount of search") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+ggplot(sigara, aes(x=Tarih, y=fiyat,group=Yıl) )+
+  geom_boxplot(aes(fill=Yıl))+scale_fill_gradient(low="paleturquoise",high="paleturquoise4")+
+  labs(title ="Monthly Average Cigarette Price in Turkey from 2013-01 to 2020-06", 
+       x = "Months over 2013 January-2020 June",
+       y = "Average Price of Cigarette") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+
+```
+
+#### References
+
+[Google Trends](https://trends.google.com/trends/?geo=US)/
+[Otomotiv Distribütörleri Derneği](http://www.odd.org.tr/web_2837_1/neuralnetwork.aspx?type=35)/
+[Sigara Fiyatları Veri Kaynağı](https://www.verikaynagi.com)/
+[Türkiye Cumhuriyet Merkez Bankası](https://evds2.tcmb.gov.tr)
+
+#### Related Codes used for Homework1
+[Codes]
+
+
+
+
+
+
