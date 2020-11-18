@@ -218,7 +218,8 @@ ggplot(sigara, aes(x=Tarih, y=fiyat,group=Yıl) )+
 [Türkiye Cumhuriyet Merkez Bankası](https://evds2.tcmb.gov.tr)
 
 #### Related Codes used for Homework1
-[Codes]
+
+[Codes] (https://github.com/BU-IE-360/fall20-edakocakarin/blob/gh-pages/files/HW1.Rmd)
 
 
 
