@@ -15,6 +15,12 @@ secondhandauto$AY=as.character(secondhandauto$AY)
 secondhandauto$AY <- factor(secondhandauto$AY, levels=unique(secondhandauto$AY))
 car19=read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/multiTimeline-2.csv")
 car20=read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files//multiTimeline.csv")
+
+auto20=c(secondhandauto$`2020,00`[1:9])
+names(auto20)=c("OCAK","ŞUBAT","MART","NİSAN","MAYIS","HAZİRAN","TEMMUZ","AĞUSTOS","EYLÜL")
+auto20=data.frame(auto20)
+
+
 ```
 #  Data Visualization and Google Trends on Three Different Measures from Turkey
 
@@ -39,6 +45,8 @@ hist(secondhandauto$`2020,00`, main = "2nd Hand Online Automative Market in 2020
 Since the short time interval data taken from Google Trends is weekly and I have categorized the search datas by months in order to compare them with the monthly data I received from the OOD's website.
 
 I predicted that there was a relationship between second hand online car sales data and the 'ikinci el araba' searches I took from google trends. For this reason, I had the boxplots drawn by months and compared them.
+
+The release of new vehicles towards the end of the year causes a decrease in second-hand car prices in the car-market. With the effect of this variable, it can be said that google trends data and used car sales data peaked in July and September.
 
 ```{r boxplots of 2018, echo=FALSE}
 ggplot(car18, aes(x=Hafta, y=Sayı, group=Ay) )+
@@ -87,6 +95,8 @@ ggplot(secondhandauto, aes(x=AY,y=`2019,00`,group=AY) )+
 
 Here are the boxplots of 2020 for search analysis of 'ikinci el araba' and also second hand car sales. 
 
+The coronavirus disease, which started in our country as of the first quarter of 2020, has caused a serious production halt worldwide. Due to this stagnation in the zero car market, people turned to second hand cars.
+
 ```{r boxplots of 2020, echo=FALSE}
 ggplot(car20, aes(x=Hafta, y=Sayı, group=Ay) )+scale_fill_gradient(low="thistle1",high="purple4")+
   geom_boxplot(aes(fill= Ay) )+
@@ -96,7 +106,7 @@ ggplot(car20, aes(x=Hafta, y=Sayı, group=Ay) )+scale_fill_gradient(low="thistle
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))+theme(plot.title = element_text(size = 15, hjust = 0.5))
 
-ggplot(secondhandauto, aes(x=AY,y=`2020,00`,group=AY) )+
+ggplot(auto20, aes(x=secondhandauto$AY[1:9],y=auto20, group=(1:9) )) +
   geom_boxplot()+scale_fill_gradient(low="thistle1",high="purple4")+
   labs(title ="2nd Hand Online Automative Market in 2020", 
        x = "Months of 2020",
@@ -105,7 +115,7 @@ ggplot(secondhandauto, aes(x=AY,y=`2020,00`,group=AY) )+
 
 ```
 
-In general, it can be said that the graphs of the two data are related to each other. The similarity between the graphics is very visible, especially in summer.
+Sales volumes, which increased from April to August, dropped at the beginning of autumn, when prices peaked. Likewise, people now search for 'second hand cars' has gradually decreased since the summer months.
 
 
 # 2) Monthly Dollar Exchange Rate in Turkey over 2012-2019
@@ -155,8 +165,9 @@ ggplot(dollarrate, aes(x=Yıl,y=`USD/TL`,group=Yıl) )+
 ```
 
 
-
 I categorized the two different datasets by year, withdrawing the search data between 2012 and 2019 from Google Trends and the dollar rate from the required places monthly. I chose to draw the boxplots by year to facilitate the comparison and make the monthly data more understandable.
+
+With the dollar rate that has been increasing since 2012, the 'dolar kaç' search data from google trends, which has been continuously increasing since 2012, is in parallel.
 
 # 3) Monthly Average Cigarette Price in Turkey from 2013-01 to 2020-06
 
@@ -215,6 +226,10 @@ ggplot(sigara, aes(x=Yıl, y=fiyat,group=Yıl) )+
 
 
 ```
+
+Cigarette prices, which increased continuously from 2014 to 2020, aroused consumer curiosity. Cigarette consumers wondering how much money they actually pay for the product they consume, what percentage of cigarettes are taken as an excise tax, have found answers to their questions using google.
+
+According to 'özel tüketim vergisi' & 'sigara vergisi' search data from Google Trends, people has been searching their questions' answer in parallel with the increase in cigarette prices.
 
 
 #### References
