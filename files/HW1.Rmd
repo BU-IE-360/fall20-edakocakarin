@@ -26,7 +26,7 @@ auto20=data.frame(auto20)
 
 # 1) Monthly 2nd Hand Online Automative Market of Turkey over 2018-2020
 
-First of all, there are monthly datas of second hand online automative markets that taken from OOD's (Otomativ Distribütörleri Derneği) website. Below you can find the histograms of these data from 2018 to 2020, categorized by years.
+First of all, there are monthly data of second hand online automative markets that taken from OOD's (Otomativ Distribütörleri Derneği) website. Below you can find the histograms of these data from 2018 to 2020, categorized by years.
 
 ##        Histograms of 2nd Hand Online Automative Market from 2018 to 2020
 
@@ -42,7 +42,7 @@ hist(secondhandauto$`2020,00`, main = "2nd Hand Online Automative Market in 2020
 
 ## Boxplots of Search Analysis of 'İkinci El Araba' in Google Search vs. 2nd Hand Online Automative Market in 2018
 
-Since the short time interval data taken from Google Trends is weekly and I have categorized the search datas by months in order to compare them with the monthly data I received from the OOD's website.
+Since the short time interval data taken from Google Trends is weekly and I have categorized the search data by months in order to compare them with the monthly data I received from the OOD's website.
 
 I predicted that there was a relationship between second hand online car sales data and the 'ikinci el araba' searches I took from google trends. For this reason, I had the boxplots drawn by months and compared them.
 
