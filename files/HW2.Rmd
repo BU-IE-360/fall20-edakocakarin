@@ -1,0 +1,283 @@
+---
+title: "HW2"
+author: "Eda Kocakarin  - IE360 - Fall 2020"
+date: "12/5/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Introduction
+
+Changing economic situation in Turkey quietly affects both consumers and producers. The fact that raw materials are mostly sourced from abroad and the increase in the exchange rate increase the cost of the producer. The increasing unit price cost greatly affects the sales prices. In addition, the producer, whose expense increases, may reduce the number of employees and therefore the number of unemployed people may increase. Particularly with the effect of Covid-19, tradesmen have recently closed one by one, the producers are victims and many people are unemployed, indicating that there may be a long-term relationship between them. The increase in the number of unemployed people and the simultaneous struggle of these people to fight inflation led individuals to take out personal loans.
+
+As a result of these inferences, in this homework the answer of **“Are personal loan statistics related to general total CPI amount and unemployment rate ?”** will be investigated.
+
+* **Personal Loan Taken & CPI Relationship**
+
+Fluctuations in the economy over the years and many other factors affect the sales prices of the products in the market. CPI (Consumer price index) is a measure that shows the average changes in the prices of a particular set of products and services purchased by a typical consumer. It is used to measure the change in the annual inflation value. Due to inflation, working individuals may or may not buy consumer goods, clothes or household goods, which they could buy without thinking about the previous year, for the next year. For this reason, they may be in a position to not even get the things they need. This may push them to take out consumer loans. 
+
+For this reason, I think that the increase in the total CPI amount and the total personal loan taken in this study will be parallel.
+
+* **Personal Loan Taken & Unemployment Rate Relationship**
+
+The decline in sales of any product pushes the manufacturer to make different regulations, take credit or downsize its business. Producers who think that they can cut costs by reducing the number of employees leave their employees unemployed, causing an increase in the employment rate in the country. Employees with regular salaries tend to take out consumer loans if they cannot cover their expenses in case they lose their jobs.
+
+For this reason, I expect the total personal loan taken to increase in parallel with the obvious increases in the unemployment rates of our country at the beginning of this study.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(readxl)
+library(data.table)
+library(dplyr)
+library(lubridate)
+library(zoo)
+library(GGally)
+library(ggcorrplot)
+```
+
+# Data Manipulation & Data Visualization
+
+Throughout the research, the relationship between the total amount of personal loan and the total amount of the CPI(Consumer Price Index) and unemployment rate will be examined. The total amount of consumer loans, the total amount of the CPI and the unemployment rate are taken from the EVDS data system in a one excel tablo. At the beginning of my work I had to manipulate these data. Downloading all of the data as a single table made it easier for me in terms of similarity of formats.
+
+In order to benefit from the features of the data table, a data table was created from this excel table. Data from EVDS are monthly data, starting from January 2015 and ending in August 2020. Using year-month data type can be problem, so I converted them to year-month-day form then add it to data.tablo as a 'Date' column.
+
+```{r data manipulating, message=FALSE, warning=FALSE, echo=FALSE}
+
+# I downloaded all related data from EVDS in a one excel tablo, so it provides convenience for me.
+# Then I create data.table from this excel.
+kredi =read_excel("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/KREDI.xlsx")
+dt=data.table(Date=kredi$Tarih, PersonalLoanTaken=kredi$`IHTIYAC/DIGER KREDILER`,CPI=kredi$`TÜFE(GENEL)`,UnemploymentRate=kredi$`ISSIZLIK ORANI`)
+
+#My data are monthly so using year-month data type can be problem, I converted them to year-month-day form. 
+#Then add it to data.tablo as a 'Date' column
+dt$Date<-parse_date_time(dt[,Date], "Ym")
+dt[,Date:=as.Date(Date,format='%Y-%m-%d')]
+```
+```{r data , message=FALSE, warning=FALSE}
+#For understanding the form of my data table and data, I showed 6 data from each January of 6 years below.
+dt[c(1,13,25,37,49,61)]
+
+```
+
+At the end of the data manipulation, we can start the plotting of histograms of each measure, so we can check whether there are obvious distributions or different statics related to measures.
+
+```{r PersonalLoanTaken histogram, echo=FALSE}
+ggplot(dt[(1:68),PersonalLoanTaken,by=Date], aes(x=PersonalLoanTaken/1000000)) +
+  geom_histogram( colour="white", fill="pink",bins=12)+ 
+  geom_density(alpha=.2, fill="turquoise", colour="lightblue") +
+  labs(title = "Histograms of Amount of Personal Loan Taken (per million) in Turkey over 2015-2020", 
+       x = "Amount of Personal Loan Taken (per million) Taken in a Month",
+       y = "Density") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1)) + facet_wrap(~year(Date))
+```
+
+You can see the histogram chart of the total consumer loans taken from 2015 to 2020 by years. As we understand from the graph, an accumulation is observed in a certain value range every year. It is not even possible to talk about normal distribution.
+
+```{r CPI histogram, echo=FALSE}
+
+ggplot(dt[(1:68),CPI,by=Date], aes(x=CPI)) +
+  geom_histogram(aes(y=..density..), colour="white", fill="pink", bins = 12)+ 
+  geom_density(alpha=.2, fill="turquoise", colour="lightblue") +
+  labs(title = "Histograms of Total CPI in Turkey over 2015-2020", 
+       x = "Total CPI in a Month",
+       y = "Density") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1)) + facet_wrap(~year(Date))
+
+
+```
+
+You can see the 5-year histogram graphs of the total CPI amount above. This data set, which constitutes the sum of the price indices of the products in different categories, is constantly increasing and increasing cumulatively. For this reason, the histogram graphs drawn on a yearly basis from 2015 to 2020 are progressing by increasing in themselves. For this reason, it does not show a certain distribution each year.
+
+When we look carefully at the graphics, we can see that the most diversity was observed in 2018, from here we can say that the highest increase was experienced throughout the year. Similar to 2018, 2019 is the 2nd year when the rate of increase is high.
+
+```{r UnemploymentRate histogram, echo=FALSE}
+
+ggplot(dt[(1:68),UnemploymentRate,by=Date], aes(x=UnemploymentRate)) +
+  geom_histogram(aes(y=..density..), colour="white", fill="pink", bins = 12)+ 
+  geom_density(alpha=.2, fill="turquoise", colour="lightblue") +
+  labs(title = "Histograms of Unemployment Rate(%) in Turkey over 2015-2020", 
+       x = "Unemployment Rate (%) in a Month",
+       y = "Density") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1)) + facet_wrap(~year(Date))
+
+```
+
+You can see the histogram graphs of the unemployment rate since 2015 above. During the first four years, significant changes are observed in unemployment rates throughout the year. Especially in 2018, while a rate of 9.6 was experienced in April, this unemployment rate increased to 13.50 at the end of the year. This catalog width and near-normal distribution is an indication of large fluctuations throughout the year. In this sense, it can be said that they have similar histogram graphics to the CPI in 2018 and 2019.
+
+### Graphs of Personal Loan Taken
+
+```{r PersonalLoanTaken line, echo=FALSE}
+
+ggplot(dt, aes(x=Date, y=PersonalLoanTaken/1000000)) + geom_line(color="turquoise")+
+  theme(axis.text.x = element_text(angle = 45))+
+  labs(x="Date", y="Personal Loan Taken (per million)", title="Amount of Personal Loan Taken (per million) in Turkey over 2015-2020 Monthly")+
+  theme_minimal()+theme(axis.text.x=element_text(angle=45, hjust=1))+
+  scale_x_date(date_breaks = "3 month", date_labels =  "%b %Y")
+
+```
+
+
+The change of personal loan depending on the total TUFE and unemployment rate will be examined in the later stages of this assignment. 
+Let's take a look at this 5-year adventure of the total general purpose loan taken as a priority. Consumer loans, which have been increasing since 2015, have increased in a certain trend until August 2018. While the peak of recent times was experienced in August 2018, a stabilization or even a slight decrease was observed after almost 1 year. It has started to increase with a much greater acceleration since the end of 2019.
+
+
+```{r PersonalLoanTaken boxplot, echo=FALSE}
+ggplot(dt, aes(x=Date, y=PersonalLoanTaken/1000000, group=year(Date))) +
+  geom_boxplot(aes(fill= factor(year(Date)))) +
+  scale_fill_brewer(palette = "BuPu", name = "Years") +
+  labs(title = "Boxplot of Amount of Personal Loan Taken (per million) in Turkey over 2015-2020 Monthly", 
+       x = "Year Dates",
+       y = "Amount") +
+  scale_x_date(date_breaks = "12 months") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+```
+
+Boxplot graph is given for personal loan taken so that we can better understand the difference of the increase between years. As in the linear graph, we see that the increase between the first 5 years is regular, but the amount of personal loans withdrawn from 2019 to 2020 has increased considerably.
+
+### Graphs of Total CPI
+
+```{r CPI line, echo=FALSE}
+ggplot(dt, aes(x=Date, y=CPI)) + geom_line(color="turquoise")+
+  theme(axis.text.x = element_text(angle = 45))+
+  labs(x="Date", y="Total CPI", title="Total CPI in Turkey over 2015-2020 Monthly")+
+  theme_minimal()+theme(axis.text.x=element_text(angle=45, hjust=1))+
+  scale_x_date(date_breaks = "3 month", date_labels =  "%b %Y")
+
+```
+
+Total CPI has been increasing at a level that can be called regular for 5 years. Some months experienced minor decreases. When we look at the graph, it can be said that after the peak point in October 2018, a decline at the right level during a period of 4-5 months covering the last months of 2018 and early 2019 can be mentioned.
+
+```{r CPI boxplot, echo=FALSE}
+ggplot(dt, aes(x=Date, y=CPI, group=year(Date))) +
+  geom_boxplot(aes(fill= factor(year(Date)))) +
+  scale_fill_brewer(palette = "BuPu", name = "Years") +
+  labs(title = "Boxplot of Total CPI in Turkey over 2015-2020 Monthly", 
+       x = "Year Dates",
+       y = "Total CPI") +
+  scale_x_date(date_breaks = "6 months") +theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+You can see the boxplot graph of the total CPI above. This graph also proves the linear graph. Total CPI increased year by year and did not experience a decline that would affect the whole year. Generally, the amount of increase between years can be said to be stable.
+
+### Graphs of Unemployment Rate
+
+
+Unemployment rate is a factor that can vary depending on many different factors. Two main factors affecting unemployment are economic recession / recession and seasonal effects. In a typical cycle, the unemployment rate falls in the spring, hits the lowest level in the summer, rises in the autumn and peaks in the winter.
+
+```{r UnemploymentRate line, echo=FALSE}
+ggplot(dt, aes(x=Date, y=UnemploymentRate)) + geom_line(color="turquoise")+
+  theme(axis.text.x = element_text(angle = 45))+
+  labs(x="Date", y="Unemployment Rate %", title="Unemployment Rate in Turkey over 2015-2020 Monthly")+
+  theme_minimal()+theme(axis.text.x=element_text(angle=45, hjust=1))+
+  scale_x_date(date_breaks = "3 month", date_labels =  "%b %Y")
+
+```
+
+Above, you can see the graph of the unemployment rate over time at 3-month intervals. This graph proves the seasonal variation of the unemployment rate. The unemployment rate, which reaches its peak in the winter months, decreases in the summer thanks to the seasonal labor. In addition to the changes in these seasons, there has been a large increase in the unemployment rate since 2019. I anticipate that this increase in the last two years may also increase the amount of personal loans.
+
+```{r UnemploymentRate boxplot, echo=FALSE}
+ggplot(dt, aes(x=Date, y=UnemploymentRate, group=year(Date))) +
+  geom_boxplot(aes(fill= factor(year(Date)))) +
+  scale_fill_brewer(palette = "BuPu", name = "Years") +
+  labs(title = "Boxplot of Unemployment Rate in Turkey over 2015-2020 Monthly", 
+       x = "Year Dates",
+       y = "Unemployment Rate (%)") +
+  scale_x_date(date_breaks = "6 months") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+```
+
+According to the boxplot, we observe that the unemployment rate varied within a certain range in 2015-2016-2017 and 2018. However, the increase we have seen in the linear chart since 2019 is also understood in this chart. Even in the summer months when the unemployment rate is lowest throughout the year, the rate hovers around 13 and this corresponds to the highest unemployment rate in the last 4 years.
+
+# Correlation Analysis
+
+```{r, include=FALSE, echo=FALSE}
+pairs = data.frame(rand=NA)
+  pairs = cbind(pairs, Date = dt$Date, PersonalLoanTaken = dt$PersonalLoanTaken, CPI = dt$CPI, UnemploymentRate=dt$UnemploymentRate)
+  pairs = pairs[,-1]
+```
+  
+After analyzing the behavior of 3 different data sets since 2015, let's talk about their relationship with each other. Correlation analysis is used to examine the relationship between personal loan taken, total CPI and unemployment rate. Below you can find scatter plots and correlation coefficients to introduce correlation analysis.
+
+```{r correlation, include=TRUE, echo=FALSE}
+ggpairs(pairs[,-1]) + theme_minimal() + labs(title ="Scatter Plots of Personal Loan Taken, Total CPI and Unemployment Rate Measures 2015-2020")
+```
+
+Besides, you can find the correlation matrix and its analysis with colors below.
+
+```{r correlation matrix, include=TRUE, echo=FALSE}
+corr_data=cor(pairs[,-1])
+corr_data
+```
+
+```{r correlation matrix colorful, include=TRUE, echo=FALSE}
+ggcorrplot(corr_data, method = "circle", col =c("yellow", "white", "lightpink"))
+```
+
+## Personal Loan Taken & Total CPI Relationship
+
+The line graph showing the change in personal loan amount and total CPI over time from 2015 to 2020 is given below. As can be seen from this graph, it is possible to create a trend that can fit these two data and there is a strong positive correlation between these two data. 
+
+```{r, include=TRUE, echo=FALSE}
+
+  ggplot(dt, aes(x=Date)) + geom_line(aes(y=PersonalLoanTaken/1000000), color="turquoise")+
+    geom_line(aes(y=CPI), color="pink")+
+    theme(axis.text.x = element_text(angle = 45))+
+    labs(x="Date",y="Amounts", title="Personal Loan and Total CPI Measures in Turkey over 2015-2020 Monthly")+
+    theme_minimal()+ylim(0, 500) +theme(axis.text.x=element_text(angle=45, hjust=1))+
+    scale_x_date(date_breaks = "3 month", date_labels =  "%b %Y")
+
+```
+
+Correlation analysis and comments are given below.
+
+```{r, include=TRUE, echo=FALSE}
+print("Correlation Test between Amount of Personal Loan Taken and Total CPI over 2015-2020")
+  print(cor.test(dt$PersonalLoanTaken, dt$CPI))
+  
+```
+
+Considering the correlation analysis results between the amount of personal loans and total CPI, it can be said that there is a strong correlation between the amount of personal loans received and total CPI. The very small p-value allows us to reject the zeroth assumption while proving a logical relationship between these two.
+
+In addition, the correlation coefficient of 0.899 is very close to 1, which is a statistical proof that the total CPI value has an effect on Personal loan taken.
+
+## Personal Loan Taken & Unemployment Rate Relationship
+
+The line graph showing the change in personal loan amount and unemployment rate over time from 2015 to 2020 is given below. Since the increase in the unemployment rate is less than the amount of personal loans, the graph is not very suitable to observe the relationship between the two. It may be more accurate to compare the relationship between the two with the rates of increase. In addition, correlation analysis also gives us information about the link between these two measures.
+
+```{r, include=TRUE, echo=FALSE}
+  ggplot(dt, aes(x=Date)) +geom_line(aes(y=PersonalLoanTaken/1000000), color="turquoise")+geom_line(aes(y=UnemploymentRate), color="lightgreen")+
+    theme(axis.text.x = element_text(angle = 45))+
+    labs(x="Date",y="Amounts", title="Personal Loan and Unemployment Rate Measures in Turkey over 2015-2020 Monthly")+
+    theme_minimal()+ylim(0, 500) +theme(axis.text.x=element_text(angle=45, hjust=1))+
+    scale_x_date(date_breaks = "3 month", date_labels =  "%b %Y")
+
+```
+
+Correlation analysis and comments are given below.
+
+```{r, include=TRUE, echo=FALSE}
+print("Correlation Test Amount of Personal Loan Taken and UnemploymentRate over 2015-2020")
+  print(cor.test(dt$PersonalLoanTaken ,dt$UnemploymentRate))
+```
+ 
+Considering the correlation analysis results between the amount of personal loans and unemployment rate, it can be said that there is a correlation between the amount of personal loans received and unemployment rate. The very small p-value allows us to reject the zeroth assumption while proving a logical relationship between these two.
+ 
+In addition, the fact that the correlation coefficient of 0.590 that proves that there is a obvious positive relation between two measures.
+ 
+# Conclusion
+
+During the study, necessary analyzed are made to reach the answer of **“Are personal loan statistics related to general total CPI amount and unemployment rate ?”** The changes of Personal Loan Taken, Total CPI and Unemployment Rate data over the years were examined one by one. Correlation analysis were made between personal loan, total CPI and unemployment rate.As a result it was observed that the amount of consumer loans withdrawn in banks was very strong with the total CPI amount, and had a positive and significant relationship with the unemployment rate. In the continuation of the study, a model can be derived from the relationship between variables by performing regression analysis with this study data covering the years 2015-2020. This analysis and modeling can also enable us to make meaningful predictions for the coming years.
+
+# References
+[EVDS](https://evds2.tcmb.gov.tr)
+
+# Appendices
+[Here](https://github.com/BU-IE-360/fall20-edakocakarin/blob/gh-pages/files/HW2.Rmd) is my RMD file about this assignment.
+ 
