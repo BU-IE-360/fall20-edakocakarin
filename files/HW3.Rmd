@@ -52,7 +52,7 @@ Throughout the homework, the behavior of home sales data will be examined, corre
 
 ## Data Manipulation & Data Visualization
 
-First of all, in order to investigate the behavior of First House Sales drawing is essential. Below you can see the graph of House Sales in Turkey over 2015-2020. When the chart is examined, it is seen that the amount of house sales first does not increase in a certain trend and follows an irregular path. To determine whether there is a seasonality or not, I checked the autocorrelation function of House Sales data.
+First of all, in order to investigate the behavior of House Sales (First) drawing is essential. Below you can see the graph of House Sales in Turkey over 2015-2020. When the chart is examined, it is seen that the amount of house sales first does not increase in a certain trend and follows an irregular path. To determine whether there is a seasonality or not, I checked the autocorrelation function of House Sales data.
 
 ```{r data manipulation, message=FALSE, warning=FALSE, echo=FALSE}
 data=read_excel("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/housesales.xlsx")
@@ -63,7 +63,7 @@ house$Date<-parse_date_time(house[,Date], "Ym")
 house[,Date:=as.Date(Date,format='%Y-%m-%d')]
 ```
 
-When the chart is examined, it is seen that the amount of house sales first does not increase in a certain trend and follows an irregular path. 
+When the chart is examined, it is seen that the amount of house sales does not increase in a certain trend and follows an irregular path. 
 
 ```{r graph, echo=FALSE}
 ggplot(house, aes(x=Date)) +geom_line(aes(y=HouseSalesFirst), color="pink")+theme(axis.text.x = element_text(angle = 45))+
@@ -75,7 +75,7 @@ ggplot(house, aes(x=Date)) +geom_line(aes(y=HouseSalesFirst), color="pink")+them
 
 Since the data does not have much variance, I continue to work as it is without the need to get the log function.
 
-When the graph on which we observe home sales data is examined in detail, it is seen that there are outliers that can seriously affect the model we will install in the future. Starting in April, due to the Covid 19 disease, there is a serious economic crisis in turkey. In house sales first data, there are significant drops in house sales amount in April 2020 and May 2020. So I add a new column that assigns 1 to these 2 outliers and 0 to other months.
+When the graph on which we observe home sales data is examined in detail, it is seen that there are outliers that can seriously affect the model we will install in the future. Starting in April, due to the Covid 19 disease, there is a serious economic crisis in turkey. In house sales data, there are significant drops in house sales amount in April 2020 and May 2020. So I add a new column that assigns 1 to these 2 outliers and 0 to other months.
 
 To determine whether there is a seasonality or not, I checked the autocorrelation function of House Sales data.
 
@@ -111,9 +111,9 @@ data3[,Date:=as.Date(Date,format='%Y-%m-%d')]
 data3[c(70,71),Diff_NRPPI:=4.2]
 ```
 
-Various factors that can affect the increase or decrease in home sales have been investigated. Dollar rate, Financial situation, housing loan, consumer loan, interest rate, consumer confidence index, new residental property index and second house sales are taken from the EVDS data system in a one excel tablo. 
+Various factors that can affect the increase or decrease in house sales have been investigated. Dollar rate, Financial situation, housing loan, consumer loan, interest rate, consumer confidence index, new residental property index and second house sales are taken from the EVDS data system in a one excel tablo. 
 
-Because of the use of data from Exchange Rate, Interest Rate and Survey Sections strongly suggested, I choose Dollar Rate, Consumer Confidence Index, Financial Situation of households and Interest Rate from these sections to check their relations between House Sales First. I take different relevant predictors such as Housing Loan Consumer Loan, New Residential Property Price Index and House Sales Second from different sections. I use the difference of the New Residential Property Index data between months to create a more meaningful relationship.
+Because of the use of data from Exchange Rate, Interest Rate and Survey Sections strongly suggested, I choose Dollar Rate, Consumer Confidence Index, Financial Situation of households and Interest Rate from these sections to check their relations between House Sales(First). I take different relevant predictors such as Housing Loan Consumer Loan, New Residential Property Price Index and House Sales Second from different sections. I use the difference of the New Residential Property Index data between months to create a more meaningful relationship.
 
 Below you can see the table and also the amount of independent variables from each January of 6 years.
 
@@ -164,7 +164,7 @@ Diff_NRPPI=data3$Diff_NRPPI
  
  Finally, I have collected all the variables I want to include in the model in a data table. Below, you can see the scatter plots and correlation coefficients of each independent variable.
  
-```{r ggpairss, echo=FALSE}
+```{r ggpairss, echo=FALSE,warning=FALSE, message=FALSE}
  
  ggpairs(pairs3) + theme_minimal() + labs(title ="Scatter Plots of Independent Variables ")
 
@@ -183,7 +183,7 @@ summary(fit0)
 
 The initial model consists of outliers, month and year variables and it has 7858 residual standard error. After that, the main aim is to decrease the residual standard error while adding new independent variables into the model. I will add Second House, Diff_NRPPI and ConsumerConfidenceIndex data to the model one by one and observe the effects.
  
-Firstly, I added the second hand house sales data as a predictor because it has the best correlation coefficient with house sales first. People can sell their old houses to buy zero houses. For this reason, second-hand home sales data significantly affect the zero home sales data.
+Firstly, I added the second hand house sales data as a predictor because it has the best correlation coefficient with house sales (first). People can sell their old houses to buy zero houses. For this reason, second-hand home sales data significantly affect the zero home sales data.
 
 ```{r fit1 model , message=FALSE, warning=FALSE}
 
@@ -204,7 +204,7 @@ summary(fit2)
 ```
 Above, you can see the model, NRPPI is added. This model is better than the old model because Residual Standard Errors is dropped to 4108 and Adjusted R-Squared increases to 0.9934 also.
 
-Thirdly, I thopught that consumer confidence index affects the House Sales First. This measure is added into the model. However, the result was not as expected. 
+Thirdly, I thopught that consumer confidence index affects the House Sales(First). This measure is added into the model. However, the result was not as expected. 
 
 ```{r fit3 model , message=FALSE, warning=FALSE}
 fit3=lm((HouseSalesFirst)~ -1+Diff_NRPPI+ConsumerConfidenceIndex+outliers+SecondHouse+as.factor(month)+as.factor(year), data = house3)
