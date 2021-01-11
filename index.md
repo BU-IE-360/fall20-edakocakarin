@@ -12,3 +12,8 @@
 
 #### [Here](/files/HW2.html) is my homework which is about times series data visualization and correlation analysis.
 
+### Homework 3 	(11.01.2021)
+
+#### [Here](/files/HW3.html) is my homework which is about Time Series Regression for Predicting Macroeconomic Indicators. 
+
+

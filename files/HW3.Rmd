@@ -1,0 +1,333 @@
+---
+title: "HW3"
+author: "Eda Kocakarin  - IE360 - Fall 2020"
+date: "1/9/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(readxl)
+library(data.table)
+library(dplyr)
+library(lubridate)
+library(zoo)
+library(GGally)
+library(plotly)
+library(ggcorrplot)
+library(corrplot)
+library(fpp)
+```
+# Time Series Regression for Predicting Macroeconomic Indicators
+
+## Introduction
+
+Turkey's changing economic situation affects many things. People who want to invest their money or buy real estate with their current money take action according to the changing economic situation. Buying a house is an event in which individuals make an attempt to raise their living standards or invest. In our country, many new houses are built on many new lands every year and these houses are put up for sale. While the zero house market is very active in some periods, some periods are quite calm. There are many different factors that affect home sales.The main purpose of this assignment is to find the determinants that affect the house(first) sales and to make a suitable model with them and as a result, to predict the hous sales data of December 2020.
+
+First of all, factors affecting the home sales market are investigated.
+
+**Dollar rate, Housing loan, Consumer loan, Interest Rate are some economic variables that can affect house sales.**
+
+* Many materials in the construction sector in Turkey are imported and import takes place in dollars. The dollar rate, which has an effect on construction costs, can also have an impact on house prices. The dollar is a potential variable to use in the rate model.
+
+* People who want to buy a house may want to take advantage of the low-interest opportunities of a house loan. For this reason, we wanted to observe the effect of the amount of house loans withdrawn on house sales.
+
+* Interest rates on consumer loans and loans will also be examined in order to diversify economic factors and increase independent variables.
+
+The EVDS surveys section has been examined in detail in order to gain an insight into the general opinion of consumers on living standards and to have sufficient information about their economic situation.
+
+**Financial Situation and Consumer Confidence Index can have effects on House Sales.**
+
+* Financial situations of households can have relation between the buying a new house. If people think that their economic situation is good, they will feel safer to buy a new house.
+
+* In the same way as the financial situation, the Consumer Confidence Index can be linked to people buying a new house relying on their economic well-being.
+
+**New Residential Property Price Index and Second-Hand House Sales are taken from housing and construction statistics, which can be related to House Sales.**
+
+* New Residential Property Price Index, which refers to the price index per square meter of newly built homes, may be linked to home sales. The change of New Residential Property Price Index by month will be used in this analysis.
+
+* Finally, people who want to live in a new home can buy a new home by selling their old house and adding their savings on top. For this reason, second-hand home sales data can seriously affect zero home sales data.
+
+Throughout the homework, the behavior of home sales data will be examined, correlation analysis will be made between indicators and a suitable model will be created as a result.
+
+## Data Manipulation & Data Visualization
+
+First of all, in order to investigate the behavior of First House Sales drawing is essential. Below you can see the graph of House Sales in Turkey over 2015-2020. When the chart is examined, it is seen that the amount of house sales first does not increase in a certain trend and follows an irregular path. To determine whether there is a seasonality or not, I checked the autocorrelation function of House Sales data.
+
+```{r data manipulation, message=FALSE, warning=FALSE, echo=FALSE}
+data=read_excel("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/housesales.xlsx")
+
+house=data.table(Date=data$Date, HouseSalesFirst=data$`HouseSales(first)`)
+
+house$Date<-parse_date_time(house[,Date], "Ym")
+house[,Date:=as.Date(Date,format='%Y-%m-%d')]
+```
+
+When the chart is examined, it is seen that the amount of house sales first does not increase in a certain trend and follows an irregular path. 
+
+```{r graph, echo=FALSE}
+ggplot(house, aes(x=Date)) +geom_line(aes(y=HouseSalesFirst), color="pink")+theme(axis.text.x = element_text(angle = 45))+
+        labs(x="Date",y="Amounts", title="House Sales First in Turkey over 2015-2020 observed Monthly")+
+        theme_minimal() +theme(axis.text.x=element_text(angle=45, hjust=1))+
+        scale_x_date(date_breaks = "2 month", date_labels =  "%b %Y")
+
+```
+
+Since the data does not have much variance, I continue to work as it is without the need to get the log function.
+
+When the graph on which we observe home sales data is examined in detail, it is seen that there are outliers that can seriously affect the model we will install in the future. Starting in April, due to the Covid 19 disease, there is a serious economic crisis in turkey. In house sales first data, there are significant drops in house sales amount in April 2020 and May 2020. So I add a new column that assigns 1 to these 2 outliers and 0 to other months.
+
+To determine whether there is a seasonality or not, I checked the autocorrelation function of House Sales data.
+
+```{r acf, echo=FALSE}
+acf(house$HouseSalesFirst)
+```
+
+There is an autocorrelation in lag=12, which will use when the regression model will form. I utilize the seasonality of the data, new column added, which shows month information. Then, to examine the unique behavior of the years, I add the year column.
+
+
+```{r data1 , message=FALSE, warning=FALSE, echo=FALSE}
+year=c(rep(2015,12),rep(2016,12),rep(2017,12),rep(2018,12),rep(2019,12),rep(2020,11))
+month=seq(1,12,by=1)
+house=cbind(house,month)
+house=cbind(house,year)
+outliers=rep(0)
+house=cbind(house,outliers)
+house[c(64,65),outliers:=1]
+```
+
+```{r data2 , message=FALSE, warning=FALSE}
+
+house[c(1,14,27,40,59,61,64,65)]
+
+```
+Above, you can see the last state of the data table, which will use for regression analysis. For understanding the form of my data table and data, I showed 6 data from each January of 6 years and 2 data for outliers below.
+
+```{r data3 , message=FALSE, warning=FALSE, echo=FALSE}
+data3=data.table(Date=data$Date, HouseSalesFirst=data$`HouseSales(first)`, DollarRate=(data$USD), FinancialSituation=data$FinancialSituation,  HousingLoan=data$HousingLoan, ConsumerLoan=(data$`ConsumerLoan(%)`), InterestRate=data$InterestRate, ConsumerConfidenceIndex=data$CCI, Diff_NRPPI=diff(data$NRPI) ,SecondHouse=data$`2ndHouse`)
+
+data3$Date<-parse_date_time(data3[,Date], "Ym")
+data3[,Date:=as.Date(Date,format='%Y-%m-%d')]
+data3[c(70,71),Diff_NRPPI:=4.2]
+```
+
+Various factors that can affect the increase or decrease in home sales have been investigated. Dollar rate, Financial situation, housing loan, consumer loan, interest rate, consumer confidence index, new residental property index and second house sales are taken from the EVDS data system in a one excel tablo. 
+
+Because of the use of data from Exchange Rate, Interest Rate and Survey Sections strongly suggested, I choose Dollar Rate, Consumer Confidence Index, Financial Situation of households and Interest Rate from these sections to check their relations between House Sales First. I take different relevant predictors such as Housing Loan Consumer Loan, New Residential Property Price Index and House Sales Second from different sections. I use the difference of the New Residential Property Index data between months to create a more meaningful relationship.
+
+Below you can see the table and also the amount of independent variables from each January of 6 years.
+
+```{r data4 , message=FALSE, warning=FALSE}
+#For understanding the form of my data table and data, I showed 6 data from each January of 6 years below.
+data3[c(1,13,25,37,49,61)]
+
+```
+
+## Correlation Analysis and Selection of Predictors
+
+First of all, let's draw the time-dependent changes of our 8 different independent variables. Below you can see the graphs, that drawn with the zoo package.
+
+```{r data5 , echo=FALSE, fig.width=8, fig.height=5}
+hw3=data3[,-1]
+plot(zoo(hw3))
+corr_data=cor(hw3)
+```
+
+Since trying to fit each independent variable into the model separately can not be efficient, to begin with, I prefer to check correlation analysis between them.
+
+
+```{r ggcorrplot, echo=FALSE}
+
+corrplot.mixed(corr_data, upper = "number", lower= "square",tl.col="black", tl.pos = "lt")
+
+```
+
+Above you can see the correlation coefficients between variables and the visualization of them.
+
+After correlation analysis and I select the Diff_NRPPI, ConsumerConfidenceIndex, SecondHouse independent variables which have better correlation coefficients and try to find the best model.
+
+According to results of fitting linear models function, the last one has the smallest residual standar error value that is 8136 and p values of independent variables are small enough. Therefore, we should use Diff_NRPI, ConsumerConfidenceIndex, SecondHouse together and take them into the model.
+
+```{r data6 ,message=FALSE, warning=FALSE,echo=FALSE}
+SecondHouse=data3$SecondHouse  
+Diff_NRPPI=data3$Diff_NRPPI
+ ConsumerConfidenceIndex=data3$ConsumerConfidenceIndex
+ house=cbind(house,SecondHouse)
+ house=cbind(house,Diff_NRPPI)
+ house=cbind(house,ConsumerConfidenceIndex)
+ house3=house[,-1]
+ str(house)
+ corr_house=cor(house3)
+ pairs3=data.frame(house3)
+
+```
+ 
+ Finally, I have collected all the variables I want to include in the model in a data table. Below, you can see the scatter plots and correlation coefficients of each independent variable.
+ 
+```{r ggpairss, echo=FALSE}
+ 
+ ggpairs(pairs3) + theme_minimal() + labs(title ="Scatter Plots of Independent Variables ")
+
+```
+
+## Time Series Regression Analysis
+
+When starting the regression analysis, let's first put the variables we determined through the behavior of the data into our model. Adding outliers, months and years regressors into the model will give us the information about the model.
+
+```{r fit0 model , message=FALSE, warning=FALSE}
+
+fit0=lm((HouseSalesFirst)~-1+(outliers)+as.factor(month)+as.factor(year) , data=house3 )
+summary(fit0)
+
+```
+
+The initial model consists of outliers, month and year variables and it has 7858 residual standard error. After that, the main aim is to decrease the residual standard error while adding new independent variables into the model. I will add Second House, Diff_NRPPI and ConsumerConfidenceIndex data to the model one by one and observe the effects.
+ 
+Firstly, I added the second hand house sales data as a predictor because it has the best correlation coefficient with house sales first. People can sell their old houses to buy zero houses. For this reason, second-hand home sales data significantly affect the zero home sales data.
+
+```{r fit1 model , message=FALSE, warning=FALSE}
+
+fit1=lm((HouseSalesFirst)~-1+SecondHouse+(outliers)+as.factor(month)+as.factor(year) , data=house3 )
+summary(fit1)
+
+```
+
+Above, there is a summary of our new model. New model's residual standard error dropped to 4262, which shows our model is better. In addition to dropped RSE, Adjusted R-Squared increases that means that our model is more suitable.
+
+Secondly, the monthly change in New Residential Property Price Index, which determines the price per square meter index, is added to the model. The amount of increase or decrease in NRPPI affects people's decision to buy a new home.
+
+```{r fit2 model , message=FALSE, warning=FALSE}
+
+fit2=lm((HouseSalesFirst)~-1+SecondHouse+ Diff_NRPPI+(outliers)+as.factor(month)+as.factor(year) , data=house3 )
+summary(fit2)
+
+```
+Above, you can see the model, NRPPI is added. This model is better than the old model because Residual Standard Errors is dropped to 4108 and Adjusted R-Squared increases to 0.9934 also.
+
+Thirdly, I thopught that consumer confidence index affects the House Sales First. This measure is added into the model. However, the result was not as expected. 
+
+```{r fit3 model , message=FALSE, warning=FALSE}
+fit3=lm((HouseSalesFirst)~ -1+Diff_NRPPI+ConsumerConfidenceIndex+outliers+SecondHouse+as.factor(month)+as.factor(year), data = house3)
+summary(fit3) 
+```
+Above, you can see the summary of the model. It seems that there is a slight increase in residual standard error, which is not good. When we examine the variables carefully and look at the p values, we can see that the Consumer Confidence Index has 0.8286 p value. We already known that larger p value results with an insignificant contribution to the ratios of other variables so we should take it out of the model.
+
+## Final Regression Analysis
+
+Below, you can see the summary of our final regression analysis. 
+
+Residual Standard error is 4108, Adjusted R-squared is 0.9934. By looking p- values, independent variables are meaningful.
+
+```{r fit4 model , message=FALSE, warning=FALSE}
+lastfit=lm((HouseSalesFirst)~ -1+Diff_NRPPI+outliers+SecondHouse+as.factor(month)+as.factor(year), data = house3)
+summary(lastfit) 
+```
+
+Let's check residuals of models using checkresiduals function. However, there are also exception points, that have greater variance, we can say that the mean of residuals is usually observed around 0. and the distribution of residuals closes to Normal.
+
+```{r fit4 model residuals , message=FALSE, warning=FALSE}
+checkresiduals(lastfit,lag=12)
+```
+
+According to Breusch-Godfrey Test statistics, p-value is 0.046. It is smaller than 0.05 that means we can not reject Ho and there are serial correlations between residuals, which is not good but acceptable.
+
+To sum up, in order to check seasonality, month variable added. Year varible is used to utilize the behaviour of years. Outliers are seen and added into the model. Besides, difference of New Residental Propert Index and Second Hand House Sales data are used.
+
+## Finding Fitted Values and Different Plots of Residuals
+
+I added 2 new column names are fitted and residuals. I fitted house sales data using the regression model I have established.
+
+```{r fitted , message=FALSE, warning=FALSE, echo=FALSE}
+house[,fitted:=fitted(lastfit)]
+house[,residual:=residuals(lastfit)]
+
+```
+
+Below, there are 2 graphs which show independent variables vs. residual points.
+
+```{r residuals graph , echo=FALSE}
+house %>%
+        ggplot(aes(x=Diff_NRPPI, y=(residual)))+ geom_point(col="orange")+theme_minimal()
+
+
+house %>%
+  ggplot(aes(x=SecondHouse, y=(residual)))+ geom_point(col="lightblue3")+theme_minimal()
+
+```
+
+Residuals are clustered in variables with low values for both graphs. In order to see messy apperance, the model can be developed in the future.
+
+```{r graph , echo=FALSE}
+house %>%
+        ggplot(aes(x=fitted, y=(residual)))+ geom_point(col="plum")+theme_minimal()
+
+
+house %>%
+        ggplot(aes(x=fitted, y=HouseSalesFirst)) + 
+        geom_point(col="red") +
+        geom_abline(slope=1, intercept=0)+theme_minimal()
+
+
+```
+
+As we can see above, our fitted variables cover the actual values sufficiently. Moreover, in fitted vs residual graphs, residuals are scattered between fitted values, this strengthens the competence of our model.
+
+## Prediction
+
+The last main goal is to estimate December 2020 house sales data using the models and variables we created.
+
+A new row is added for the month of December 2020. The values of outlier, month and year variables for the month of December are entered in the new row. In EVDS websites, there is no data for NRPPI values and Second-Hand House Sales data for December 2020. Instead of guessing these two variables individually, I used the last month's data for the month of December.
+
+```{r predicted , include=FALSE}
+month_info=rep(12)
+house=rbind(house,data.table(month=as.factor(month_info)),fill=T)
+house[72,SecondHouse:=75825]
+house[72,Diff_NRPPI:=4.2]
+house[72,year:=2020]
+house[72,outliers:=0]
+
+house[is.na(fitted)==T,fitted:=predict(lastfit,house[is.na(fitted)==T])]
+house[,predicted_sales:=(fitted)]
+
+```
+
+Here the graph of the actual value and predicted value.
+
+```{r predicted-actual graph , echo=FALSE, message=FALSE, warning=FALSE,}
+cols <- c("predicted" = "gold", "actual" = "darkseagreen")
+ggplot() + 
+        geom_line(data = house, aes(x = Date, y = predicted_sales,color = "predicted")) +
+        geom_line(data = house, aes(x = Date, y = HouseSalesFirst,color = "actual")) +
+        xlab('time') +
+        ylab('House Sales First') +
+        scale_color_manual(values = cols)+ theme_minimal() +theme(axis.text.x=element_text(angle=45, hjust=1))+
+        scale_x_date(date_breaks = "6 month", date_labels =  "%b %Y")
+
+
+```
+
+By looking the graph above, it can be said that although there are differences in some points, there is a serious similarity.
+
+House sales data for December 2020 is estimated using the model to complete the final stage of the assignment.
+
+**The predicted value for December 2020 is:**
+
+```{r prediction of dec 2020 , message=FALSE, warning=FALSE}
+house[72,predicted_sales]
+
+```
+
+## Conclusion
+
+The pattern and seasonality of house sales data were observed. According to the autocorrelation function, lag was seen at 12, so the model building was started with the month effect. Afterwards, observed outliers and year information were added to the model.
+
+The economic, social, and house construction related predictor mentioned in the Introduction section was analyzed. Variables with high correlation coefficients with new house sales have been put into the model and tested. As a result, the difference of New Residental Propert Index and Second Hand House Sales data was used in the model.
+
+At the end of the analyzes and modeling experiments, the best model was obtained and the residual standard erroru of the obtained model was found to be 4108. With this model, house sales data are predict, then the predicted and actual values are plotted. Finally, the month of December 2020, which is the main purpose of the homework, was estimated in accordance with the model.
+
+
+## References
+[EVDS](https://evds2.tcmb.gov.tr)
+
+## Appendices
+[Here](https://github.com/BU-IE-360/fall20-edakocakarin/blob/gh-pages/files/HW2.Rmd) is my RMD file about this assignment.
