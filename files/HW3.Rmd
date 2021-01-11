@@ -330,4 +330,4 @@ At the end of the analyzes and modeling experiments, the best model was obtained
 [EVDS](https://evds2.tcmb.gov.tr)
 
 ## Appendices
-[Here](https://github.com/BU-IE-360/fall20-edakocakarin/blob/gh-pages/files/HW2.Rmd) is my RMD file about this assignment.
+[Here](https://github.com/BU-IE-360/fall20-edakocakarin/blob/gh-pages/files/HW3.Rmd) is my RMD file about this assignment.
