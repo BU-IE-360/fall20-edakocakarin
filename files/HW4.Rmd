@@ -1,0 +1,303 @@
+---
+title: "HW4"
+author: "Eda Kocakarin  - IE360 - Fall 2020"
+date: "1/24/2021"
+output: html_document
+---
+
+# Stationarity of Turkish Electricity Consumption Data
+
+## Introduction
+
+Electricity consumption is affected by many different factors. Temperature, seasonal changes, special days, holidays, days of the week and months are the main factors affecting electricity consumption. Data that vary according to more than one criteria and are significantly correlated with these are called non-stationary data. In addition, data free of trends, seasonality and variables that affect the data are called stationary.
+
+The main purpose of this assignment is to make the electricity consumption data stationary. For this reason, during the homework, visual analysis of electricity consumption will be made and consumption data will be eliminated accordingly. After the stationarity is obtained, the most suitable Arima model will be found and applied. After the Arima model is established, a forecast will be made for the dates 8 January - 23 January 2021. Estimation data will be compared with real data and performance will be tested.
+
+
+```{r setup, include=FALSE}
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(data.table)
+library(zoo)
+library(GGally)
+library(ggcorrplot)
+library(urca)
+library(forecast)
+```
+
+## Data Manipulation & Visual Anaylsis
+
+Firstly, downloaded electricity consumption data from EPIAS website shows hourly consumption. In order to study on daily data, I take the the mean of electricity consumption for each day. I summarize the data with respect to date information.
+
+```{r dataman,message=FALSE, warning=FALSE, echo=FALSE}
+a=read_excel("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/ElectricityConsumption.xlsx")
+electricity=data.table(Date=a$Tarih, Hour=a$Saat, Consumption=a$`Tuketim Miktar˝ (MWh)`)
+dailyData=data.table(electricity%>% group_by(Date)%>% summarise(dailyConsumption=mean(Consumption)))
+dailyData$Date=as.Date(dailyData$Date, format = "%d.%m.%Y")
+dailyData=dailyData%>%arrange(Date)
+
+```
+
+Below, you can see the form of the beginning data.
+
+```{r datashown , message=FALSE, warning=FALSE,echo=FALSE}
+
+head(dailyData)
+
+```
+
+Plotting the daily consumption data is important to see pattern of the dataset. Above, you can see the graph of the Daily Mean Electricity Consumption in Turkey.
+
+```{r plot, warning=FALSE, include=TRUE,echo=FALSE}
+ggplot(dailyData,aes(x=Date,y=dailyConsumption))+geom_line(color="pink")+
+  labs(x="Date",y="Daily Mean Consumption (mWh)", title=" Daily Mean Electricity Consumption in Turkey ")+
+  theme_minimal()+ scale_x_date(date_breaks = "6 month", date_labels =  "%b %Y")
+  
+```
+
+The range of our daily consumption data is from January 1, 2017 to January 8, 2021. There is an obvious seasonality when we examine the line graph. It can be said that electricity consumption changes depending on the seasonal changes. In addition, the corona virus situation, which has occurred since March 2020, has negatively affected electricity consumption. In order to get stationary data, the data will be cleared from seasonality and the time series will be decomposed to obtain a fixed data.
+
+```{acf, include=TRUE,echo=FALSE}
+plot(acf(dailyData$dailyConsumption, plot=FALSE), main = "Autocorrelation of Mean Electricity Consumption (Daily)", 
+     col="pink", lwd=1.5,xlab="Lag in Days") 
+
+```
+
+
+```{r pacf, include=TRUE,echo=FALSE}
+
+plot(pacf(dailyData$dailyConsumption,plot=FALSE), main = "Partial Autocorrelation of Mean Electricity Consumption (Daily)", 
+     col="red", lwd=1.5, xlab="Lag in Days")
+
+```
+
+In order to investigate the correlation of data, autocorrelation and partial autocorrelation function are checked. There are positive autocorrelations in lags, lag 1 and lag 7 are the important ones. Lag-7 can be explained by weekly seasonality and  Lag-1 is explained by trend.
+
+Besides, Partial autocorrelation function proves that there is a weekly seasonality. To make data stationary, we must first eliminate the effects of the days of week on electricity consumption. For this reason, a new column is added, which shows the day's effects, then this effect is eliminated from the daily consumption.
+Besides, instead of effects of days, using the mean of days effects is logical. Therefore, days of week meanly effect is added to daily consumption. As a result, our daily consumption is free from weekly seasonality now. In this way, the effect of the days of the week on electricity consumption is eliminated.
+
+```{r dataman2,message=FALSE, warning=FALSE, echo=FALSE}
+dailyData[,weekofday := as.factor(weekdays(Date))]
+wof_eff=dailyData[,list(wof_eff=mean(dailyConsumption)),by=list(weekofday)]
+dailyData=cbind(dailyData, wof_eff=wof_eff$wof_eff)
+wof_eff[,meanwof:=mean(wof_eff)]
+dailyData=cbind(dailyData, meanwof=wof_eff$meanwof)
+dailyData=dailyData[, day_final:= dailyConsumption- wof_eff + meanwof]
+
+```
+
+```{r pacf2, include=TRUE,echo=FALSE}
+plot(pacf(dailyData$day_final,plot=FALSE), main = "PACF of Mean Electricity Consumption (Purged from weekly seasonality)", 
+     col="brown", lwd=1.5, xlab="Lag in Days")
+
+```
+
+Above, you can see the PACF of the data purged from weekly seasonality. Lag 1 is still high, therefore the data can be shifted for 1 day and the daily difference of the data can be used.
+Before performing the necessary operations, we can apply KPSS test to check whether the data is stationary or not.
+
+```{r KPSS,message=FALSE, warning=FALSE, echo=FALSE}
+dailyData$day_final %>% ur.kpss() %>% summary()
+```
+The result of KPSS test statistic is 0.145. When we compare the value with critical value at alpha level of 0.01 (0.347), we can say that our data is stationary. However, we can try to make our data more stationary by substracting lag1 from daily consumption.
+
+```{r dataman3, echo=FALSE, warning=FALSE, message=FALSE}
+dailyData=dailyData[,lag1:=shift(day_final,1)]
+dailyData=dailyData[, day_final_Lag1 := day_final - lag1 ]
+```
+
+Above, you can see the adjusted daily consumption, that is shown stationary.
+
+```{r graph2,echo=FALSE,message=FALSE, warning=FALSE}
+ggplot(dailyData,aes(x=Date,y=day_final_Lag1))+geom_line(color="pink")+
+  labs(x="Date",y="Daily Mean Consumption (mWh)", title=" Mean of Electricity Consumption in Turkey (day of week effect removed and lag1 shifted) ")+
+  theme_minimal()+ scale_x_date(date_breaks = "6 month", date_labels =  "%b %Y")
+
+```
+
+```{r pacf3 ,include=TRUE,echo=FALSE}
+
+plot(pacf(na.omit(dailyData$day_final_Lag1),plot=FALSE), main = "Partial Autocorrelation of Adjucted Electricity Consumption", 
+     col="black", lwd=1.5, xlab="Lag in Days")
+
+
+```
+
+Now, there is no significant lags and PACF seems okay, so we can check stationarity of adjusted consumption using KPSS test. 
+
+```{r kpss2,message=FALSE, warning=FALSE, echo=FALSE}
+dailyData$day_final_Lag1 %>% ur.kpss() %>% summary()
+
+```
+
+According to the KPSS Unit Root Test results, our test-statistic value 0.0087 is less than the critical values. Therefore, we can continue with the time series decomposition.
+
+## Time Series Decomposition 
+
+Firstly, we create the time series object to utilize the ts function, decompose. In order to decrease monthly effect, we construct ts object with frequency 30.
+
+```{r plot ts, include=TRUE,echo=FALSE}
+tsdata=ts(dailyData$day_final_Lag1[-1],frequency = 30)
+plot(tsdata)
+
+```
+
+Above, you can see the ts plot of adjusted consumption. When we examine the plot, we can say that variance does not increases over time. Therefore, we prefer to use additive decomposition instead of multiplicative decomposition method.
+
+
+```{r decompose, echo=FALSE}
+data_dec_additive=decompose(tsdata,type="additive")
+plot(data_dec_additive) 
+```
+
+Above, you can see additive decomposition of adjusted consumption. By looking the random part, we can say there are still outliers that are caused by special days such as holidays and public days. However, since our adjusted data is stationary enough, it will be enough to clear our ts object from seasonality and trend.
+
+
+```{r detrend, echo=FALSE}
+deseasonalized=tsdata-(data_dec_additive$seasonal)
+detrend_seasonalized=deseasonalized-(data_dec_additive$trend)
+ts.plot(detrend_seasonalized)
+
+```
+
+Above you can see the detrend and deseasonalized adjusted consumption.
+
+## Stationarity & ACF/PACF
+
+Let's look at the kpss test result to make sure that the stationarity of data we had from the ts decomposition.
+
+```{r tslast,message=FALSE, warning=FALSE, echo=FALSE}
+detrend_seasonalized %>% ur.kpss() %>% summary()
+```
+
+According to the KPSS Unit Root Test results, our test-statistic value 0.0025 is less than our last test results 0.0087 and still smaller than the critical values 0.347. 
+
+Finally, let's take a look at our ts object, which we will put in the arima model, in detail and then set up our model.
+
+```{r tsplot,echo=FALSE}
+tsdisplay(detrend_seasonalized)
+```
+
+Since our ACF / PACF graphics and our detrend & deseasonalized plot are suitable for stationarity, we can move on to the model selection part with arima.
+
+## Arima Model Selection
+
+To begin with, I prefer to use auto.arima to find the best fit.
+
+```{r modelsel,message=FALSE, warning=FALSE, echo=FALSE}
+fitted=auto.arima(detrend_seasonalized, seasonal=FALSE, trace=T)
+```
+According to results of auto.arima, best model is ARIMA(0,0,3). When finding the best model, Arima looks to the AIC and BIC values. Lower AIC or BIC is better for the reliable of the model. AIC estimates the relative amount of information lost by a given model and BIC looks penalty for the number of parameters.
+
+Below, you can see the coefficients of the ARIMA(0,0,3) model and corresponding AIC and BIC values.
+
+```{r model1,message=FALSE, warning=FALSE, echo=FALSE}
+model1=arima(detrend_seasonalized, order=c(0,0,3))
+print(model1)
+AIC(model1) #AIC
+BIC(model1) #BIC
+
+```
+
+ARIMA(0,0,3) model will be used to forecast the electricity consumption between 9th of January to 23rd of January in 2021.
+
+## Forecasting with ARIMA(0,0,3) Model
+
+First of all, we make a 14-day forecast with our arima model. Then we undo the ts decomposition moves we made to obtain stationary consumption data.
+
+Then, we get our 14-day forecast by correcting the action we have made to reduce the effect of the days of the week.
+
+```{r forecast,message=FALSE, warning=FALSE, echo=FALSE}
+model_forecasted=predict(model1, n.ahead = 14)$pred
+model_forecasted
+
+```
+
+```{r forecast2,message=FALSE, warning=FALSE, echo=FALSE}
+last_trend_value=as.numeric(rep(tail(data_dec_additive$trend[!is.na(data_dec_additive$trend)],1),14))
+seasonality=as.numeric(tail(data_dec_additive$seasonal,14))
+#back to the original series
+model_forecast=model_forecasted+last_trend_value+seasonality
+model_forecast
+
+```
+
+```{r forecasted3,message=FALSE, warning=FALSE, echo=FALSE}
+b=read_excel("/Users/edakocakarin/Desktop/GercekZamanliTuketim-09012021-23012021.xlsx")
+nextDays=data.table(Date=b$Tarih, Hour=b$Saat, Consumption=b$`Tuketim Miktarý (MWh)`)
+nextDays=data.table(nextDays%>% group_by(Date)%>% summarise(dailyConsumption=mean(Consumption)))
+nextDays$Date=as.Date(nextDays$Date, format = "%d.%m.%Y")
+nextDays=nextDays%>%arrange(Date)
+
+#decomposing week of day effects
+nextDays[,weekofday := as.factor(weekdays(Date))]
+#wof_eff=nextDays[,list(wof_eff=mean(dailyConsumption)),by=list(weekofday)]
+nextDays=cbind(nextDays, wof_eff=dailyData$wof_eff[7:20])
+nextDays=cbind(nextDays, meanwof=dailyData$meanwof[7:20])
+
+
+nextDays=nextDays[,shifted:=model_forecast[1:14]+dailyConsumption]
+
+nextDays=nextDays[, predicted:= shifted-meanwof+wof_eff ]
+
+
+actual=nextDays$dailyConsumption
+forecastfinal=nextDays$predicted
+
+```
+
+```{r vs graph, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+cols = c("forecast" = "turquoise", "actual" = "purple")
+ggplot() +
+  geom_line(data=nextDays, aes(x=Date, y=predicted, color="forecast")) +
+  geom_line(data=nextDays, aes(x=Date, y=dailyConsumption, color="actual")) +
+  labs(title = "Predicted vs. Actual Daily Electricity Consumption", 
+       x = "Date",
+       y = "Consumption (mWh)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_manual(values = cols)
+```
+
+Lastly, we take the real electricity consumption value from EPIAS website. Above, you can see the actual vs predicted graph.
+
+## Performance Measures (Back-Testing)
+
+Testing the prediction we make as a result of the model we have set up is a feedback mechanism that shows our performance. For this reason, we compare our actual and forecasted data and look at measures such as mean, sd, error, FBias, MAPE, MAD, WMAPE.
+
+```{R TEST,message=FALSE, warning=FALSE, echo=FALSE}
+accu = function(actual, forecasted){
+  n = length(actual)
+  error=actual-forecasted
+  mean = mean(actual)
+  sd = sd(actual)
+  FBias = sum(error)/sum(actual)
+  MAPE = sum(abs(error/actual))/n
+  MAD = sum(abs(error))/n
+  WMAPE = MAD / mean
+  l = data.frame(n, mean, sd, error, FBias, MAPE, MAD, WMAPE)
+  return(l[1,])
+}
+
+```
+
+```{r finall, message=FALSE,echo=FALSE}
+testing=accu(nextDays$dailyConsumption,nextDays$predicted)
+testing
+```
+
+By looking the test statistics, we can say that ARIMA(0,0,3), 3 moving average, model is applicable. Our model has lower WMAPE value, which is an indicator of model suitability.
+
+## Conclusion
+
+First of all, the hourly electricity consumption data we received from the EPIAS website converted into a daily data set using the mean function. Then, we started the steps of making electricity consumption stationary, which is one of the main objectives of the assignment. The effect of the days of the week on consumption was observed and eliminated. In PACF analysis, the high value in lag-1 observed, then lag 1 of consumption data was taken to eliminate daily consumption from lag1 Daily consumption is shifted and then subtracted from each other. Consequently, the adjusted consumption data obtained were converted to the time series object and the decomposition property of ts was used. Adjusted consumption composed from trend and seasonality.
+
+Necessary investigations were made and data stationary came out according to the KPSS test result. For this reason, the most suitable arima model was searched with the auto.arima function and ARIMA(0,0,3) has found to be best model. Estimation was made using the ARIMA (0,0,3) model and then the actual vs predicted graph was observed. The goodness of our model has been tested. Some statistical values such as mean, sd, error, FBias, MAPE, MAD, WMAPE were observed and necessary comments were made.
+
+## References
+[EPIAS](https://seffaflik.epias.com.tr/transparency/tuketim/gerceklesen-tuketim/gercek-zamanli-tuketim.xhtml)
+
+## Appendices
+[Here](https://github.com/BU-IE-360/fall20-edakocakarin/blob/gh-pages/files/HW4.Rmd) is my RMD file about this assignment.
+
