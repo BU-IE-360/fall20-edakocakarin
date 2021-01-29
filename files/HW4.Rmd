@@ -27,7 +27,7 @@ library(urca)
 library(forecast)
 ```
 
-## Data Manipulation & Visual Anaylsis
+## Data Manipulation & Visual Analysis
 
 Firstly, downloaded electricity consumption data from EPIAS website shows hourly consumption. In order to study on daily data, I take the the mean of electricity consumption for each day. I summarize the data with respect to date information.
 
