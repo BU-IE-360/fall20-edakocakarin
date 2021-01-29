@@ -213,6 +213,7 @@ model_forecasted=predict(model1, n.ahead = 14)$pred
 
 ```
 
+
 ```{r forecast2,message=FALSE, warning=FALSE, echo=FALSE}
 last_trend_value=as.numeric(rep(tail(data_dec_additive$trend[!is.na(data_dec_additive$trend)],1),14))
 seasonality=as.numeric(tail(data_dec_additive$seasonal,14))
