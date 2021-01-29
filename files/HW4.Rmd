@@ -139,7 +139,7 @@ Firstly, we create the time series object to utilize the ts function, decompose.
 
 ```{r plot ts, include=TRUE,echo=FALSE}
 tsdata=ts(dailyData$day_final_Lag1[-1],frequency = 30)
-plot(tsdata)
+plot(tsdata, main="Time Series of Adjusted Consumption")
 
 ```
 
@@ -157,7 +157,7 @@ Above, you can see additive decomposition of adjusted consumption. By looking th
 ```{r detrend, echo=FALSE}
 deseasonalized=tsdata-(data_dec_additive$seasonal)
 detrend_seasonalized=deseasonalized-(data_dec_additive$trend)
-ts.plot(detrend_seasonalized)
+ts.plot(detrend_seasonalized, main="Time Series of detrend & deseasonalized Adjusted Consumption")
 
 ```
 
@@ -208,9 +208,8 @@ First of all, we make a 14-day forecast with our arima model. Then we undo the t
 
 Then, we get our 14-day forecast by correcting the action we have made to reduce the effect of the days of the week.
 
-```{r forecast,message=FALSE, warning=FALSE, echo=FALSE}
+```{r forecast , message=FALSE, warning=FALSE, echo=FALSE}
 model_forecasted=predict(model1, n.ahead = 14)$pred
-model_forecasted
 
 ```
 
@@ -219,7 +218,6 @@ last_trend_value=as.numeric(rep(tail(data_dec_additive$trend[!is.na(data_dec_add
 seasonality=as.numeric(tail(data_dec_additive$seasonal,14))
 #back to the original series
 model_forecast=model_forecasted+last_trend_value+seasonality
-model_forecast
 
 ```
 
