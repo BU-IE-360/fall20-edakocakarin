@@ -1,0 +1,588 @@
+---
+title: "IE360_FINAL"
+author: "Eda Kocakarin  - IE360 - Fall 2020"
+date: "2/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(data.table)
+library(zoo)
+library(GGally)
+library(ggcorrplot)
+library(urca)
+library(forecast)
+library(corrplot)
+library(fpp)
+
+```
+
+## Introduction
+
+In this exam, our aim is forecasting hourly solar power. There are different the weather measurements for four grid points (coordinates) nearby the power plant. Weather measurements are:
+
+**TEMP:** Temperature at the provided location.
+
+**DSWRF:** This is the short version of downward shortwave radiation flux which is known to be highly related to the production level. 
+
+**CLOUD_LOW_LAYER:** This is total cloud cover data (in terms of percentage) for low-level type of clouds.
+
+We will make prediction for January 2021 and December 2020 hourly. Time series decomposition and linear regression are the methods that we use. This exam assignment includes two different approaches to the forecasting using these 2 different methods.
+
+```{r data manip, warning=FALSE,echo=FALSE}
+solarpower=as.data.table(read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/production_data_with_weather.csv"))
+solarpower$Date<-parse_date_time(solarpower[,Date], "Ymd")
+solarpower[,Date:=as.Date(Date,format='%Y-%m-%d')]
+solarpower[,dailymean:=mean(Production),by=Date]
+
+```
+
+To start with, I check the distribution of hourly solar energy production during the day. 
+
+```{r plot0, echo=FALSE}
+ggplot(solarpower, aes(x=Date)) +geom_line(aes(y=Production), color="orange")+theme(axis.text.x = element_text(angle = 45))+
+        labs(x="Date",y="Production", title="Solar Power Plant Production between 2019-10-09 and 2021-02-02 Hourly")+
+        theme_minimal() +theme(axis.text.x=element_text(angle=45, hjust=1))+
+        scale_x_date(date_breaks = "1 month", date_labels =  "%b %Y")
+
+```
+
+In our solar energy production data, there is zero energy production at night throughout 7-8 hours in general because of lack of daylight. Therefore, providing hourly solar power prediction is difficult. I decided to work daily data by taking the mean of the hourly consumption by date. Besides, temperature, cloud cover data, downward shortwave radiation flux are related variables about production amount.
+
+
+Below, you can see our daily solar power plant data.
+
+```{r plot, echo=FALSE}
+ggplot(solarpower, aes(x=Date)) +geom_line(aes(y=dailymean), color="red")+theme(axis.text.x = element_text(angle = 45))+
+        labs(x="Date",y="Production", title="Mean Solar Power Production between 2019-10-09 and 2021-02-02 Hourly")+
+        theme_minimal() +theme(axis.text.x=element_text(angle=45, hjust=1))+
+        scale_x_date(date_breaks = "2 month", date_labels =  "%b %Y")
+
+```
+
+When we examine the graph, we can say that the amount of solar energy generation shows seasonality. The mean of ts object is not constant and the variance of solar energy production is changeable. Therefore, solar energy production time series is not stationary with respect to its mean and variance.
+
+When seasonality is detailed, it can be said that while the mean of solar energy production increases in summer months, there is a decrease in winter months. The reason for this can be attributed to the longer days in summer and the increase in the time to benefit from sunlight.
+
+
+
+```{r data manip2, warning=FALSE,echo=FALSE}
+
+plot(acf(solarpower$dailymean,lags=48,plot=FALSE), main = "Autocorrelation of Mean Solar Power Production (Daily)", 
+     col="darkgreen", lwd=2,xlab="Lag in Days") 
+
+plot(pacf(solarpower$dailymean,lags=48,plot=FALSE), main = "Partial Autocorrelation of Mean Solar Power Production (Daily)", 
+     col="darkblue", lwd=2, xlab="Lag in Days")
+
+
+```
+
+There are serious autocorrelations in each lag. In the long run, it can be observed that the data from one day is significantly correlated with the ones from other day. Taking the Moving Average can be good idea to stabilize the data.
+
+In partial autocorrelation graph, lag1 and lag25 are are significantly high. High pacf in lag1 is evidence that AR1 method can be applied to data to make it stationary.
+
+## Forecasting with time series analysis
+
+Using functions of time series object  is useful for time series decomposition. To start with, I construct the time series object with frequency 7 in order to examine the weekly seasonality of the solar production data. I select range of train data between 9th October 2019 and 30th November 2020. In this method, the main aim is to reach stationarity.
+
+Below, you can see the daily mean solar power energy production data with frequency 7.
+
+```{r data manipx, message=FALSE,warning=FALSE,echo=FALSE}
+dailyData=data.table(solarpower%>% group_by(Date)%>% summarise(dailyProduction=mean(Production)))
+dailyData$Date=as.Date(dailyData$Date, format = "%d.%m.%Y")
+dailyData=dailyData%>%arrange(Date)
+trainData=dailyData[Date < "2020-12-01"]
+tsdata=ts(trainData$dailyProduction,frequency = 7)
+
+plot(tsdata, main = "Solar Power Production Time Series (Daily)", 
+     col="darkgreen", lwd=1,ylab="Amount", xlab="Weeks") 
+
+```
+
+Variance is not stable over weeks and fluctuated a lot. In order to stabilize variance, I try to take a log of the data object.
+
+```{r data manip212, warning=FALSE,echo=FALSE}
+tslog=log(tsdata)
+plot(tslog, main = "Log of Solar Power Production Time Series (Daily)", 
+     col="darkgreen", lwd=1,ylab="Amount", xlab="Weeks") 
+
+```
+
+Above, you can see the graph of ts object taken log function. Variance seems similar the older one when I use log function. Therefore, I continue with normal ts object.
+
+```{r data manip21, warning=FALSE,echo=FALSE}
+
+tsdisplay(tsdata, main="time series object")
+```
+
+I can start decomposition of object.
+
+Due to the behaviour of variance, I select the multiplicative decomposition method. 
+
+```{r data manip31, warning=FALSE,echo=FALSE}
+data_dec_multip<-decompose(tsdata,type="multiplicative")
+plot(data_dec_multip,col="red", lwd=1)
+```
+
+```{r data manip32, warning=FALSE,echo=FALSE}
+deseasonalized=tsdata/(data_dec_multip$seasonal)
+plot(deseasonalized,main="Time Series of deseasonalized Adjusted Production",col="orange")
+```
+
+
+```{r data manip3, warning=FALSE,echo=FALSE}
+
+detrend_seasonalized=deseasonalized/(data_dec_multip$trend)
+data_random=detrend_seasonalized
+
+ts.plot(data_random, main="Time Series of detrend & deseasonalized Adjusted Production",col="blue")
+
+```
+
+Variance seems more stable and mean is around 1, which is fine.
+Let's check the ACF and PACF function.
+
+```{r data manip4, warning=FALSE,echo=FALSE}
+
+plot(acf(na.omit(data_random),lag.max=60,plot=FALSE), main = "Autocorrelation of detrend & deseasonalized Adjusted Production",col="black", lwd=1.5, xlab="Lag in Days")
+
+plot(pacf(na.omit(data_random),lag.max=60,plot=FALSE), main = "Partial Autocorrelation of detrend & deseasonalized Adjusted Production",col="black", lwd=1.5, xlab="Lag in Days")
+
+```
+
+By looking the Acf graph, I can say autocorrelations in lags are not high except for lag1. The decrease in lag 2 after the high correlation in lag 1 indicates that the Autoregressive(1) model may be appropriate. 
+
+Then, to check the stationarity of random data remaining from decomposition, Kpss test is used.
+
+```{r tslast,message=FALSE, warning=FALSE, echo=FALSE}
+data_random %>% ur.kpss() %>% summary()
+```
+
+The result of KPSS test statistic is 0.0233. When we compare the value with critical value at alpha level of 0.01 (0.0233<0.347), we can say that our data is stationary. 
+
+Continue with the arima model selection for random data. I use the auto.arima function.
+
+#### MODEL 1- ARIMA(2,0,3):
+
+```{r modelsel,message=FALSE, warning=FALSE, echo=FALSE}
+
+model1=auto.arima(data_random,seasonal=FALSE,trace = TRUE )
+print(model1)
+
+```
+
+The best model from auto arima is ARIMA(2,0,3), means autoregressive(2) and moving average(3). 
+AIC and BIC values are showed below.
+
+```{r modelsel11, warning=FALSE, echo=FALSE}
+#AIC:
+AIC(model1) 
+
+#BIC:
+BIC(model1)
+
+```
+
+I decided to try different combinations of Arima models to check the suitability of the result from auto arima and to find lower AIC, BIC values. I choose ARIMA(1,0,4), ARIMA(1,0,3), ARIMA(2,0,2), ARIMA(2,0,4) models as test models, which are similar to ARIMA(2,0,3).
+
+#### MODEL 2- ARIMA(1,0,4):
+
+```{r modelsel2, warning=FALSE, echo=FALSE}
+model2=arima(data_random, order=c(1,0,4) )
+print(model2)
+#AIC:
+AIC(model2) 
+
+#BIC:
+BIC(model2)
+```
+
+#### MODEL 3- ARIMA(1,0,3):
+
+```{r modelsel3,warning=FALSE, echo=FALSE}
+model3=arima(data_random, order=c(1,0,3) )
+print(model3)
+#AIC:
+AIC(model3) 
+
+#BIC:
+BIC(model3)
+```
+
+#### MODEL 4- ARIMA(2,0,2):
+```{r modelsel4, warning=FALSE, echo=FALSE}
+model4=arima(data_random, order=c(2,0,2) )
+print(model4)
+#AIC:
+AIC(model4) 
+
+#BIC:
+BIC(model4)
+```
+
+#### MODEL 5- ARIMA(2,0,4):
+
+```{r modelsel5, warning=FALSE, echo=FALSE}
+model5=arima(data_random, order=c(2,0,4) )
+print(model5)
+#AIC:
+AIC(model5) 
+
+#BIC:
+BIC(model5)
+```
+
+According to different ARIMA models tried, AIC and BIC values are very similar. I choose the best model ARIMA(2,0,3), which has the lowest AIC and BIC values.
+
+```{r modelsel6,message=FALSE, warning=FALSE, echo=FALSE}
+tsdisplay(residuals(model1), main="Residuals from ARIMA(2,0,3) model")
+
+```
+
+Residuals from ARIMA(2,0,3) model has a constant mean. There are significant autocorrelations in lag-9 and lag-11, but in general autocorrelations between residuals are fine.
+
+I can continue with the forecasting part using ARIMA(2,0,3) model. Here I select my train data until December 1, 2020 and estimate December 2020 and January 2021 using train data.
+
+
+```{r forecast0 , message=FALSE, warning=FALSE, echo=FALSE}
+
+start=as.Date("2020-11-29")
+end=as.Date("2021-01-30")
+ts_forecast = data.table(Date=as.Date(seq.Date(start+1, end+1, by=1)))
+ts_forecast[,Forecast:=0]
+
+for(i in (seq.Date(start+1, end+1, by=1))){
+ 
+  i = as.Date(i, origin="1970-01-01")
+  
+  diff = (as.numeric(i) - as.numeric(ymd("2019-10-09")))
+  diff=as.numeric(diff)
+ 
+  train = dailyData%>%filter(Date<i)
+  
+  ts_train = ts(train$dailyProduction, frequency = 7)
+  train_decomp = decompose(ts_train,type="multiplicative")
+  train_deseasonalized=ts_train/(train_decomp$seasonal)
+  train_detrend_seasonalized=train_deseasonalized/(train_decomp$trend)
+  train_random=train_detrend_seasonalized
+
+  randoms = data.table(Date=as.Date(seq.Date(as.Date(ymd("2019-10-09")), i-1, by=1)))
+  randoms[,Random:=(train_random)]
+  
+
+  train_model = arima(randoms$Random, order = c(2,0,3))
+
+  forecasted = forecast(train_model, h=2)
+
+  seasonality=as.numeric((train_decomp$seasonal[(diff%%7)+1]))
+  trendvalue=as.numeric(train_decomp$trend[diff-3])
+  modelforecasted= (forecasted$mean[2]) * seasonality *trendvalue
+  ts_forecast[Date==i+1,Forecast:= modelforecasted]
+}
+
+```
+
+I predicted tomorrow using yesterday's train data. Then I collected the forecasted values and actual daily values in a table.
+Below, you can see the graph of actual. vs predicted values for solar energy production from 2020-12-01 to 2021-01-31.
+
+```{r forecast12 , message=FALSE, warning=FALSE, echo=FALSE}
+testDatats=data.table(solarpower%>% group_by(Date)%>% summarise(dailyProduction=mean(Production)))
+testDatats$Date=as.Date(dailyData$Date, format = "%d.%m.%Y")
+testDatats=dailyData%>%arrange(Date)
+testDatats=dailyData[Date > "2020-11-30" & Date < "2021-02-01"  ]
+tsfor=ts_forecast[2:63]
+testDatats=testDatats[,dailyForecasted:=tsfor$Forecast]
+
+finalts=data.table(Date=testDatats$Date,Production=testDatats$dailyProduction,Forecasted=testDatats$dailyForecasted) 
+
+```
+
+```{r vs graph, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+cols = c("forecast" = "turquoise", "actual" = "red")
+ggplot() +
+  geom_line(data=finalts, aes(x=Date, y=Forecasted, color="forecast")) +
+  geom_line(data=finalts, aes(x=Date, y=Production, color="actual")) +
+  labs(title = "Predicted vs. Actual Daily Solar Energy Power", 
+       x = "Date",
+       y = "Production") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_manual(values = cols)
+```
+
+I had difficulty adding the trend and seasonality component suitable for the model from Arima. For this reason, I could not create a very good model, actual and predicted values are not close enough.
+
+Later, I will test the performance of forecasting with time series analysis.
+
+
+## Forecasting with regression
+
+To begin with regression analysis, I check the correlations between solar energy production and different measures such as temperature, cloud cover data and downward shortwave radiation flux, from 4 different coordinates. I use the mean of cloud layer variables, maximum and minimum oftemprature variables and mean downward shortwave radiation flux variables.
+
+```{r reg1, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+solarpower[,maxdswrf:=max(DSWRF_37.75_34.25,DSWRF_37.75_34.5,DSWRF_38_34.25,DSWRF_38_34.5),by=Date]
+solarpower[,avgmaxdswrf:=max(mean(DSWRF_37.75_34.25),mean(DSWRF_37.75_34.5),mean(DSWRF_38_34.25),mean(DSWRF_38_34.5)),by=Date]
+solarpower[,avgmindswrf:=min(mean(DSWRF_37.75_34.25),mean(DSWRF_37.75_34.5),mean(DSWRF_38_34.25),mean(DSWRF_38_34.5)),by=Date]
+solarpower[,meancloud:=sum(mean(CLOUD_LOW_LAYER_37.75_34.25),mean(CLOUD_LOW_LAYER_37.75_34.5),mean(CLOUD_LOW_LAYER_38_34.25),mean(CLOUD_LOW_LAYER_38_34.5))/168,by=Date]
+solarpower[,tavg:=sum(mean(TEMP_37.75_34.25),mean(TEMP_37.75_34.5),mean(TEMP_38_34.25),mean(TEMP_38_34.5))/168,by=Date]
+solarpower[,dswrf1:=sum(mean(DSWRF_37.75_34.25))/168,by=Date]
+solarpower[,cloud1:=sum(mean(CLOUD_LOW_LAYER_37.75_34.25))/168,by=Date]
+
+regdata = as.data.table(solarpower %>% group_by(Date) %>% summarise(Production = mean(Production),   avgmaxdswrf=mean(avgmaxdswrf),avgmindswrf=mean(avgmindswrf),meancloud=mean(meancloud),tavg=mean(tavg),maxdswrf=mean(maxdswrf),dswrf1=mean(dswrf1),cloud1=mean(cloud1)))
+
+final=regdata[,-1]
+corr_data=cor(final)
+corrplot.mixed(corr_data, lower = "number", upper= "square",tl.col="black", tl.pos = "lt")
+
+```
+
+According to correlation matrix and correlation coefficients, average of minimum dswrf, average min of temperature and mean cloud are chosen as regressors.
+
+Regression model 1 is formed.
+
+#### MODEL 1:
+
+```{r reg1s, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+reg1=summary(lm(Production~avgmindswrf+tavg+meancloud, data=regdata))
+reg1
+checkresiduals((reg1))
+```
+
+When I check the residuals from linear regression model1, I realized lag1 is very high in ACF graph. To improve my model, I will add difference of normal production and one day shifted.
+
+#### MODEL 2:
+
+```{r reg2, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+regdata=regdata[,lag1:=Production-shift(Production,-1)]
+reg2=summary(lm(Production~avgmindswrf+tavg+meancloud+lag1, data=regdata))
+reg2
+checkresiduals((reg2))
+```
+
+Residual standard error decreases from 1.21 to 1.084, when I add lag1 variable. Besides, adjusted R-squared value is increased to 0.8083, which is good. To utilize the seasonality of solar energy production data, I will add the month of the date into the regression model.
+
+#### MODEL 3:
+
+```{r reg3, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+
+regdata[,month := as.factor(month(Date))]
+
+reg3=summary(lm(Production~avgmindswrf+tavg+meancloud+lag1+month, data=regdata))
+reg3
+checkresiduals((reg3))
+```
+
+Residual standard error decreases to 1.051, when I add month variable. Besides, adjusted R-squared value is increased to 0.8198, which is good. In order to check the trend component, I will add the trend into the regression model. 
+Besides, I think that I can add outliers as regressors then I plot the data again. I choose the outlierbig=1, if the production larger than 8. If the production smaller than 2, I choose the outlier small=1. Other days' outliersmall and outlierbig variables are 0.
+
+```{r regg, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+plot(regdata$Production,ylab="Amount of Production")
+```
+
+Then, I added the trend, outliersmall and outlierbig components into the model.
+
+#### MODEL 4:
+
+```{r reg4, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+regdata[,trend:=1:.N]
+regdata[,outlierbig:=0]
+regdata[,outliersmall:=0]
+regdata[Production>8,outlierbig:=1]
+regdata[Production<2,outliersmall:=1]
+reg4=summary(lm(Production~outlierbig+outliersmall+avgmindswrf+meancloud+lag1+(month)+trend+tavg, data=regdata))
+reg4
+
+```
+
+Our model has 0.8836 residual standard error and its adjusted r-squared is 0.8726. However, as I did not expect, average of minimum temperature has an insignificant coefficient. I delete the temperature regressor and the intercept part to talk about the significance of coefficients.
+
+#### FINAL REGRESSION MODEL:
+
+```{r reg5, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+reg5=summary(lm(Production~-1+outlierbig+outliersmall+avgmindswrf+meancloud+lag1+(month)+trend, data=regdata))
+reg5
+checkresiduals(reg5)
+
+```
+
+I examine the coefficient of regressors, it can be said that every independent variable has small p value that means their effects are very significant. Therefore, outlierbig, outliersmall, average of minimum dswrf, mean cloud, lag1, month and trend are chosen as regressors.
+
+By looking checkresiduals function, residuals mean are around zero. Residuals are distributed similar to the normal distribution and they aren't significantly correlated except for lag1.
+
+I can continue with the forecasting part using final regression model. I used the time until December 1, 2020 for train data and I took December 2020 and January 2021 montha as test data, which should be estimated.
+
+I updated the train and test data simultaneously and created test data using my final model.
+
+```{r regforecast, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+                               
+teststart=as.Date("2020-11-30")
+
+result=vector('list',63)
+                              for(i in 0:61){
+                                
+                                 current_test=teststart+i
+                                 #print(current_test)
+                                 traindata=regdata[Date<(teststart)]
+                                 
+                                 testdt=regdata[Date>=(teststart)]
+                                 fitday=lm(Production~outlierbig+outliersmall+avgmindswrf+meancloud+lag1+(month)+trend, data=traindata)
+                                   testdt[,forecasted:=predict(fitday,testdt)]
+                                 result[(i+1)]=testdt$forecasted
+                                
+                                 
+                              }
+
+finalreg=data.table(Date=testdt$Date,Production=testdt$Production,Forecasted=testdt$forecasted[2:63]) 
+
+```
+
+As a result, I had a graph to compare the forecasted values with the actual values using the final regression model.
+
+```{r regg vs graph, include=TRUE,message=FALSE, warning=FALSE, echo=FALSE}
+cols = c("forecast" = "turquoise", "actual" = "purple")
+ggplot() +
+  geom_line(data=finalreg[2:63], aes(x=Date, y=Forecasted, color="forecast")) +
+  geom_line(data=finalreg[2:63], aes(x=Date, y=Production, color="actual")) +
+  labs(title = "Predicted vs. Actual Daily Solar Energy Power", 
+       x = "Date",
+       y = "Production") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_manual(values = cols)
+```
+
+Above, you can see the graph that represents the predicted vs. actual value of solar energy production by daily.
+
+We should check performance testing for each method, then we continue with the method which has lower WMAPE value to convert daily data to hourly data.
+
+
+## Comparison the results from Method A and Method B
+
+### Performance Testing of Method A
+
+```{R TEST,message=FALSE, warning=FALSE, echo=FALSE}
+accu = function(actual, forecasted){
+  n = length(actual)
+  error=actual-forecasted
+  mean = mean(actual)
+  sd = sd(actual)
+  FBias = sum(error)/sum(actual)
+  MAPE = sum(abs(error/actual))/n
+  MAD = sum(abs(error))/n
+  WMAPE = MAD / mean
+  l = data.frame(n, mean, sd, error, FBias, MAPE, MAD, WMAPE)
+  return(l[1,])
+}
+
+```
+
+```{r testts, message=FALSE,echo=FALSE}
+testingts=accu(finalts$Production,finalts$Forecasted)
+testingts
+```
+
+By looking the test statistics, we can say that using time series decomposition with ARIMA(2,0,3) model is not preferable. Our model WMAPE value is 0.417, which is not low enough.
+
+### Performance Testing of Method B
+
+```{r testreg, message=FALSE,echo=FALSE}
+testingreg=accu(finalreg$Production[2:63],finalreg$Forecasted[2:63])
+testingreg
+```
+
+By looking the test statistics, we can say that forecasting with regression model is more convenient to use than method A. Our model WMAPE value is 0.305, which is not low enough for our model to be a good model.
+
+Test results of both methods are not satisfactory in terms of proficiency. With the problem of not having production in the evening, I thought that I could handle this 0 production values by converting it to daily data, but it did not give a very good result. It may be a good way to make the production prediction directly hourly to develop the model. Different time series models and regression models can be constructed for each hour separately, which will be good improvement.
+
+Finally, I will convert daily forecasting to hourly by using the regression method that has the lower WMAPE than time series decomposition.
+
+## Transformation from daily data to hourly data
+
+I have collected all the months of December and January in our data to find percentage of hourly solar energy production to daily mean. I try to find the contribution of each hour to the amount of solar energy production for each day in December and for each day in January.
+
+```{r testhourly, message=FALSE,echo=FALSE}
+
+december=solarpower%>%filter(month(Date)==12 )
+january=solarpower%>%filter(month(Date)==1)
+
+jan=c(rep(0,24))
+dec=c(rep(0,24))
+
+for(i in 0:23){
+  dec[i]=mean(december[Hour==i]$Production)
+  
+}
+
+
+for(i in 0:23){
+  jan[i]=mean(january[Hour==i]$Production)
+  
+}
+
+decemberpercentage=dec/mean(dec)
+januarypercentage=jan/mean(jan)
+decemberforecasted=as.vector(finalreg$Forecasted[2:32])
+januaryforecasted=as.vector(finalreg$Forecasted[33:63])
+
+decemberhourlyprediction = decemberpercentage*decemberforecasted[1]
+januaryhourlyprediction=januarypercentage*januaryforecasted[1]
+
+for(i in 2:31){
+    decemberhourlyprediction=c(decemberhourlyprediction,decemberpercentage*decemberforecasted[i])
+    januaryhourlyprediction=c(januaryhourlyprediction,januarypercentage*januaryforecasted[i])
+    
+}
+decemberhourlypredictiondt=as.data.table(decemberhourlyprediction)
+  januaryhourlypredictiondt=as.data.table(januaryhourlyprediction)
+
+finalhourly=data.table(Date=solarpower$Date[10057:11544], Hour=solarpower$Hour[10057:11544],Production=solarpower$Production[10057:11544],Prediction=1)
+finalhourly=finalhourly[1:744, Prediction:=decemberhourlypredictiondt$decemberhourlyprediction]
+finalhourly=finalhourly[745:1488, Prediction:=januaryhourlypredictiondt$januaryhourlyprediction]
+
+```
+
+```{r testhourlygraph, message=FALSE,echo=FALSE}
+cols = c("forecast" = "orange", "actual" = "purple")
+ggplot() +
+  geom_line(data=finalhourly, aes(x=Date, y=Prediction, color="forecast")) +
+  geom_line(data=finalhourly, aes(x=Date, y=Production, color="actual")) +
+  labs(title = "Predicted vs. Actual Daily Solar Energy Power Hourly", 
+       x = "Date",
+       y = "Production") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_manual(values = cols)
+
+```
+
+Above, you can see the actual vs. predicted solar power energy production hourly between 1 December 2020 and 31 January 2021. Mid December and January, my predictions are above their real values.
+
+For the development part of the final exam prediction, a more detailed analysis can be made to convert daily data to hourly data. By examination of hourly ratio of daily data, hourly production can have relations between downward shortwave radiation flux, cloud cover data and temperature. As a result, to improve the model, hourly behaviour of these variables can be observed.
+
+## Conclusion
+
+Method A, Forecasting with time series decomposition used. Method B, Forecasting with regression analysis made. Regression analysis has better test results in daily prediction, so Method B is chosen for converting hourly data. Relationship between hours and effects of daily production is analyzed. Daily forecasting data converted into hourly production prediction. Actual and predicted hourly test data are drawn. Lots of  overpredictions are observed in graph. 
+
+```{r testregfinalhourly, message=FALSE,echo=FALSE}
+testingregfinal=accu(finalhourly$Production,finalhourly$Prediction)
+testingregfinal
+```
+
+Then, I tested the hourly forecasted value with the actual ones. The weighted mean absolute percentage error (WMAPE) is used to measure performance,it is resulted as 0.5, which is not small adequately. WMAPE can be reinterpreted for different areas with different weights. FBias closes to zero so my predictions are not very overpredicted or underpredicted.
+
+Finally, I can say that working with daily data didn't result with success. Therefore, 
+bu sebeple saatlik oranlarımızın çok başarılı olmadığını gördük. I offer 2 suggestions for improving models and prediction in general.
+
+**1.** Constructing forecasting model separately for 24 hours a day
+
+**2.** Making better analyze the distribution of hours throughout the day after establishing a daily forecast model
+
+##  Code
+The RMD File can be found [Here](https://bu-ie-360.github.io/fall20-edakocakarin/files/360_FINAL.Rmd).
+
+

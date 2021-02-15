@@ -1,0 +1,781 @@
+---
+title: "Forecasting the Hourly Electricity Consumption of Turkey"
+author: "Nilüfer Çetin  - Eda Kocakarın - Ömer Anıl Usta - IE360 - Fall 2020"
+date: "14 02 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# install the required packages first
+require(jsonlite)
+require(httr)
+require(data.table)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(TeachingDemos)
+library(urca)
+library(GGally)
+library(forecast)
+library(RColorBrewer)
+
+# some functions
+residual_add = function(df){
+  days = c("sun", "mon", "tue", "wed", "thu", "fri", "sat")
+  for(i in 1:7){
+    df[,paste0("lag2_", days[i]):=shift(residual,2)]
+    df[Day!=i, paste0("lag2_", days[i]):=0]
+    df[,paste0("lag7_", days[i]):=shift(residual,7)]
+    df[Day!=i, paste0("lag7_", days[i]):=0]
+  }
+  return(df)
+}
+
+accuracy = function(actual, error){
+  n = length(actual)
+  mean = mean(actual)
+  sd = sd(actual)
+  FBias = sum(error)/sum(actual)
+  MAPE = sum(abs(error/actual))/n
+  MAD = sum(abs(error))/n
+  WMAPE = MAD / mean
+  r = data.frame(n, mean, sd, error, FBias, MAPE, MAD, WMAPE)
+  return(r[1,])
+}
+
+get_token <- function(username, password, url_site){
+  
+  post_body = list(username=username,password=password)
+  post_url_string = paste0(url_site,'/token/')
+  result = POST(post_url_string, body = post_body)
+  
+  # error handling (wrong credentials)
+  if(result$status_code==400){
+    print('Check your credentials')
+    return(0)
+  }
+  else if (result$status_code==201){
+    output = content(result)
+    token = output$key
+  }
+  
+  return(token)
+}
+
+get_data <- function(start_date='2020-03-20', token, url_site){
+  
+  post_body = list(start_date=start_date,username=username,password=password)
+  post_url_string = paste0(url_site,'/dataset/')
+  
+  header = add_headers(c(Authorization=paste('Token',token,sep=' ')))
+  result = GET(post_url_string, header, body = post_body)
+  output = content(result)
+  data = data.table::rbindlist(output)
+  data[,event_date:=as.Date(event_date)]
+  data = data[order(event_date)]
+  return(data)
+}
+
+
+send_submission <- function(predictions, token, url_site, submit_now=F){
+  
+  format_check=check_format(predictions)
+  if(!format_check){
+    return(FALSE)
+  }
+  
+  post_string="list("
+  for(i in 1:nrow(predictions)){
+    if(i<nrow(predictions)){
+      post_string=sprintf("%s%s,",post_string,predictions$forecast[i])
+    } else {
+      post_string=sprintf("%s%s)",post_string,predictions$forecast[i])
+    }
+  }
+  
+  submission = eval(parse(text=post_string))
+  json_body = jsonlite::toJSON(submission, auto_unbox = TRUE)
+  submission=list(submission=json_body)
+  
+  print(submission)
+  # {"31515569":2.4,"32939029":2.4,"4066298":2.4,"6676673":2.4,"7061886":2.4,"85004":2.4} 
+  
+  if(!submit_now){
+    print("You did not submit.")
+    return(FALSE)      
+  }
+  
+  
+  header = add_headers(c(Authorization=paste('Token',token,sep=' ')))
+  post_url_string = paste0(url_site,'/submission/')
+  result = POST(post_url_string, header, body=submission)
+  
+  if (result$status_code==201){
+    print("Successfully submitted. Below you can see the details of your submission")
+  } else {
+    print("Could not submit. Please check the error message below, contact the assistant if needed.")
+  }
+  
+  print(content(result))
+  
+}
+
+check_format <- function(predictions){
+  
+  if(is.data.frame(predictions) | is.data.frame(predictions)){
+    if('forecast' %in% names(predictions)){
+      if(nrow(predictions)==24){
+        if(all(is.numeric(predictions$forecast))){
+          print("Format OK")
+          return(TRUE)
+        } else {
+          print("forecast information is not numeric")
+          return(FALSE)                
+        }
+      } else {
+        print("Forecasts for 24 hours should be provided, current number of rows:")
+        print(nrow(predictions))
+        return(FALSE)     
+      }
+    } 
+  } else {
+    print("Wrong format. Please provide data.frame or data.table object")
+    return(FALSE)
+  }
+  
+}
+
+# this part is main code
+subm_url = 'http://46.101.124.77'
+
+u_name = "Group6"
+p_word = "hS0QWkMIVXJwWMPD"
+submit_now = FALSE
+
+username = u_name
+password = p_word
+
+##Temperature is here
+prev_data = as.data.table(read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/bulk_consumption_with_temp.csv"))
+##Actual consumption is here
+prev_data[,3] = as.data.table(read.csv("/Users/edakocakarin/Documents/GitHub/fall20-edakocakarin/files/Bulk_consumption.csv"))[1:35232,3]
+
+
+##To get latest data
+token = get_token(username=u_name, password=p_word, url=subm_url)
+data_new = get_data(token=token,url=subm_url)
+
+
+prev_data[,Date:=as.Date(Date)]
+colnames(data_new) = colnames(prev_data)
+prev_data[,Consumption:=gsub(".","",Consumption, fixed=TRUE)]
+prev_data[,Consumption:=as.double(gsub(",",".",Consumption, fixed=TRUE))]
+data = rbind(prev_data, data_new)
+
+data[,tmax:=max(T_1, T_2, T_3, T_4, T_5, T_6, T_7),by=Date]
+data[,tmin:=min(T_1, T_2, T_3, T_4, T_5, T_6, T_7),by=Date]
+data[,t_avg_max:=max(mean(T_1), mean(T_2), mean(T_3), mean(T_4), mean(T_5), mean(T_6), mean(T_7)),by=Date]
+data[,t_avg_min:=min(mean(T_1), mean(T_2), mean(T_3), mean(T_4), mean(T_5), mean(T_6), mean(T_7)),by=Date]
+data[,t_avg:=sum(T_1, T_2, T_3, T_4, T_5, T_6, T_7)/168, Date]
+data[,tdiff:=tmax-tmin]
+data[,index:=1:.N]
+```
+
+## Introduction
+
+In many countries of the world, production and distribution of electricity is regulated in a market structure in which producers are faced with several rules imposed by market regulator. There are various decisions a producer can make in these markets that have the power to affect market structure and profit of the producer in the short run. One of most important decision making process involves producers to report the amount of electricity that can supplied for the minimum amount of price they are willing to charge in each hour of the next day. The price of electricity for the next day can be determined by various algorithms that take these notified amounts as inputs. Therefore, it can be said that the decisions involved with production have definite influence on the profit or loss of the producer.
+
+Turkish Electricity Market ruled by EPIAS is an example of such electricity markets. In this market, producers are obliged to declare the hourly amount of electricity to be produced and their relative minimum prices until 12 PM of the previous day. As mentioned before, the decision on the amounts are of high importance to the producers. To illustrate this fact basically, it can be said that a producer that have decided to produce a given amount may face higher demand. To provide for need the need of electricity, these producer may buy electricity from another one. However, in this case the producers incurs additional costs for buying electricity and supplying to customers gets less profitable if the producer were to declare a higher amount to be provided. A similar case can also be applied for unforeseen low demand. As can be understood from these examples, deciding on amounts based on a forecast with minimum errors is a primary aim for the producers in the market. 
+
+Because of the setting of the market and importance of the decisions, forecasting hourly demand of electricity in a day ahead fashion is a topic that has gained interest by industrial organizations as well as academics over the recent years. The aim of this study is also similar that it can be summarized as developing an hourly electricity load forecasting model by analyzing the consumption and limited temperature data from 2017 till mid-January 2021. The model developed is supposed to be tested on a test period between January 30th and February 13rd while measuring the performances of forecasts provided in a day ahead setting. 
+
+To help with forecasting several models from various domains can be constructed. Shah et al. (2019) argued that there are a lot of different techniques that are employed to forecast the hourly demand series such as Auto-Regressive models, Moving Averages, Seasonal ARIMA models, Spline Methods, Exponential Smoothing, Holt – Winters Methods and regression. As well as methods from time series and statistical modeling domains, with the increasing popularity of Machine Learning; forecasting techniques powered by Machine Learning and Data Mining algorithms, neural networks, decision trees and such have also been more widely used in the several past years. Nevertheless, for this study choosing a method from either time series or regression is more suitable. 
+
+The choice of the method can be facilitated by stating a couple of facts and observations for general hourly electricity consumption series. First of all, it is implied by Tepedino et al. (2014) that the series exhibit daily, weekly and yearly seasonality. Although methods from both time series and regression is suitable to use for forecasting series with seasonality, this is not the only feature of the electricity consumption series. The observations of electricity consumption may vary because of two other factors; calendar effects and temperature. (Calili et al, 2016) Though temperature levels may have some seasonality in general, the series are also subject to some unexpected behavior that may have especially increased in frequency because of rise in global temperature levels over the last few decades. Regarding the calendar effects, Chapagain et al. (2020) claims that the consumption tends to get lower in national holidays that may even contribute to the decrease in the electricity consumption in the week the holiday occurs. However, it is stated by Ziel (2018) that although the consumption incurred by industrial activities are reduced in holidays, consumption of electricity may get higher especially on touristic destinations. Furthermore, in Turkey there are also religious holidays which occur at different dates each year, another feature of the series that may worsen the performance of time series modelling. Hence, because of the complications introduced by temperature and special days, it is decided that linear regression can be a more suitable candidate to model the hourly electricity consumption of Turkey in this study. 
+
+From this discussion it can be inferred that modelling hour of the day, day of the week, yearly seasonality, temperature and occurrence of a special day such as national and religious holidays can be utilized in the model to be produced. Nonetheless, before developing a model it should be useful to analyze the data by proper visualizations to check whether these outlined rules also apply to the series at hand or if the data include additional features that may call for modelling. When the first few observations of the data are inspected,
+
+```{r, include=TRUE, echo=FALSE}
+data = data%>%arrange(Date, Hour)
+head(data, 4)
+```
+
+It can be seen that the observations are gathered in an hourly fashion. Moreover, hourly temperature recordings from several destinations in Turkey such as Antalya, İstanbul, Adana, Eskişehir are also provided within the data. The series start from January 1st 2017 and include January 28th 2021 at last. Keeping in mind that the observations are recorded for each hour in each day for approximately 4 years, the visualizations will be constructed by both the hourly series and daily sum series to reduce the complexity introduced by vast number of observations. When the hourly observations are plotted with respect to time,
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+ggplot(data%>%filter(Date<"2021-01-29"), aes(x=index, y=Consumption)) +
+  geom_line(size = 0.5, color="chocolate3") +
+  labs(title = "Hourly Consumed Electricity in Turkey 2017-January 2021", 
+       x = "Date Index",
+       y = "Hourly Consumed Electricity (mWh)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+From this plot it can be understood that the series have yearly seasonality, with increased consumption in winter time and even more increased consumption in summers. Moreover, in almost every year, there are two points in time where the consumption levels get considerably reduced, with one at the beginning and other at the end of the summer. However, these crashes in consumption seem to move a couple days behind as years pass indicating that these might be the religious holidays in which industrial activity gets considerably reduced for at least 2 or 3 days due to many work places closing on these days. Another interesting point is the unexpected decrease in the levels in 2020 before the summer that might be regarded as a consequence of lock-downs. Furthermore, in every once in a while there are clusters where the consumption gets a little lower than the usual, these might be weekends. To more clearly investigate the effects of COVID period and weekends, plot of daily aggregated consumption series can be visualized,
+
+```{r, include=TRUE, echo=FALSE, message=FALSE,warning=FALSE}
+daily_data = as.data.table(data %>% group_by(Date) %>% summarise(Consumption = sum(Consumption), tdiff = mean(tdiff),
+                          tmin = mean(tmin), tavg = mean(t_avg), tmax = as.double(max(tmax)), t_avg_min = mean(t_avg_min), t_avg_max = mean(t_avg_max)))
+
+ggplot(daily_data%>%filter(year(Date)<"2021"),aes(x=Date))+geom_line(aes(y=Consumption),color="orange")+labs(x="Date",y="Daily Total Consumption (mWh)", title="Daily Electricity Consumption Turkey from 2017 to 28-01-2021")+
+  theme_minimal()+ scale_x_date(date_breaks = "6 month", date_labels =  "%b %Y")
+```
+
+This visualization shows that there is decrease in the level of consumption in 2020 starting from mid-March and ending on the beginning of summer, since the levels at that point seem to be in line with observations from the same period in the past. Furthermore, observations closer to the summer season seem to be less infected compared to the observations in April, signaling a smoothing in the effect of lockdown. It should be reminded that in Turkey, the lockdown triggered by pandemic started approximately in mid to late March, restrictions were increased through March and April, and return to normal life has happened in a gradual manner starting from mid-May with increased pace at the beginning of June. As can be understood, the effect of pandemic on the consumption series in Turkey is mostly in accordance with the lock down in which effects are smoothed over time. To illustrate the effect of the day of week,
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+ggplot(daily_data%>%filter(Date>"2018-03-11" & Date<"2018-03-27"), aes(x=Date, y=Consumption)) +
+  geom_line(size = 1, color="red2") +
+  labs(title = "Daily Electricity Consumption of Turkey in Weeks from March 2018", 
+       x = "Date",
+       y = "Daily Consumed Electricity (mWh)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+As can be seen from the plots above and this detailed plot the level of consumption is somewhat effected by day of the week with decreased consumption in Saturday and even reduced levels in Sunday since probably the industrial activity gets even lower. To check the seasonality from the aspect of serial correlation,
+
+```{r, include=TRUE, echo=FALSE}
+plot(acf(data[1:35736]$Consumption, lag.max = 200, plot=FALSE), main = "Autocorrelation of Hourly Consumed Electricity in Turkey in 4 Years", 
+     col="purple", lwd=2, xlab="Lag in Hours") 
+```
+
+As visualized by the plot, there is high extent of serial correlation between consecutive hours, same hours of the day and same hours of the same day. These auto-correlations can be seen by the peaks in lag 24 and 168. As a consequence it can be stated that the hourly electricity consumption series include daily and weekly seasonality with amount of consumption in hours close in a day being highly positively correlated also. 
+
+```{r, include=TRUE, echo=FALSE}
+plot(acf(daily_data[1:1489]$Consumption, plot=FALSE,lag.max=60), main = "Autocorrelation of Mean Electricity Consumption in Turkey (Daily)", 
+     col="orange", lwd=2,xlab="Lag in Days") 
+```
+
+The auto correlation plot of the daily aggregated series also demonstrate the underlying weekly positive serial correlation in the data, as the correlations arrive at peak levels in multiples of 7. In addition, although the coefficient is lower than the coefficient between consecutive hours, there is still a considerably high extent of positive serial correlation at lag 1 and lag 2, that can be benefited from while constructing the model. When the hourly observations are gathered in a histogram,
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(data%>%filter(Date<"2021-01-30"), aes(x=Consumption)) +
+  geom_histogram(aes(y=..density..), colour="blue", fill="lightcyan", bins = 20)+ 
+  geom_density(alpha=.2, fill="purple", colour="navy") +
+  labs(title = "Histogram of Amount of Electricity Consumed in Turkey over 2017-2020", 
+       x = "Hourly Amount of Electricity Consumed (mWh)",
+       y = "Density") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+It is visible that the distribution might be fitted to a normal distribution with some rule breakers. First of all, the mean level of the consumption seem to be a little ambiguous as most of the classes in the middle have close number of observations. Furthermore, on the left tail of the histogram the number of observations get smaller in a different manner with a longer left tail. This situation might have arose because of the slight increase in trend, sharp crash in lockdown period or higher levels residing in midst of summer which is a comparably shorter season in a year. Nevertheless, explaining the exact reasons require more analysis that fall outside of the scope of this study. Hence, although not perfect, the observations are accepted to be coming from a roughly normal distribution. If year by year histograms of daily summed consumptions are visualized,
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(daily_data[Date<"2021-01-01",Consumption,by=Date], aes(x=Consumption)) +
+  geom_histogram(aes(y=..density..),colour="white", fill="orange",bins=12)+ 
+  geom_density(alpha=.2, fill="turquoise", colour="lightblue") +
+  labs(title = "Histograms of Amount of Daily Consumed Electricity (mWh) in Turkey over 2017-2020", 
+       x = "Amount of Total Consumed Electricity (mWh) in a Day",
+       y = "Density") +
+  theme_minimal() +theme(axis.text.x = element_text(angle = 45, hjust = 1)) + facet_wrap(~year(Date))
+```
+
+From this year by year histograms, it is obvious that in all years the left tail of the histograms are longer of which possible causes are declared before. The observations are not a perfect fit for normal distribution because of nearby classes including closer number of observations. Nevertheless, the year 2019 seem to be a better fit maybe because the market tends to reach a more steady state over time. However, distribution in 2020 is profoundly distorted probably because of the lockdown periods and effect of pandemic decreasing production in spring. Lastly, if daily mean temperature levels of the provided cities of Turkey are visualized,
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(daily_data%>%filter(Date<"2021-01-01"), aes(x=Date, y=tavg)) +
+  geom_line(size = 1, color="maroon") +
+  labs(title = "Daily Averaged Temperatures from 7 Centers of Turkey in 2017-2020", 
+       x = "Date",
+       y = "Daily Averaged Temperature in Celsius") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_grid(rows = vars(year(Date)), scales = "free")
+```
+
+The plot is very similar to the plot of daily consumption series. However, because of the unexpected or outlier observations in the series it is a better idea to actually include one or more regressors related to temperature levels in the model instead of letting the overlapping seasonality handle the situation. Although the consumption and averaged temperature show a similar yearly seasonality a more proper analysis of the relationship between the two variables will be carried out in the model building section. 
+
+## Literature and Model Selection
+
+From the general facts discussed and analysis, some of the predictors to be used are already decided such as day of week, season or month of the year, indicator for lockdown period, and indicator for special days in calendar along with maybe lagged variables and trend component. Temperature aggregated via some function such as average, max or difference between min and max can also be added to the model. However, before building a model it should be reminded again that the series also show a daily seasonality. Hodge (2020) has detailed the impact of hour of the day in the percentage of consumption indicating that the percentages may vary from season to season or day to day. From these observations, it may be a more practical idea to model the daily consumption series first and then distribute the predictions over hours via some defined vector or linear regression model considering each season or day of the week separately. This approach can be practical and less complex considering the amount of observations reduced. Furthermore from the auto-correlation plot of the hourly series the high serial correlation at lag 168, that is a week, seems to support the argument. In fact if the percentages of the hour by hour consumption in a day is obtained and an auto-correlation plot is visualized,
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+data[,sum_day:=sum(Consumption),by=Date]
+data[,percent:=Consumption/sum_day]
+plot(acf(data[1:35736]$percent, lag.max = 175, plot=FALSE), main = "Autocorrelation of Hourly Percentage of Consumed Electricity in Turkey", 
+     col="mediumorchid", lwd=2, xlab="Lag in Hours")
+```
+
+It can be seen that the auto-correlation at lag 168 is as striking as the one in lag 1. Although there are arguments in favor of the approach, the downside of the approach is that the interactions between the hourly temperature and the consumption percentage will be missing. Though a regression model including temperature as predictor for percentage can be used for distribution the percentages may not add up to 1 and the process may complicate the matters. As DiPersio et al. (2017) have pointed out there are also a lot of models in literature dealing with modelling 24 different time series for each hour of the day. However, the amount of work and the possibility of different predictors for different hours contributes complexity of this approach. Hence, in this study forecasting daily series and partitioning the consumption to 24 hours via proper methods will be the aim.
+
+## Approach
+
+As a starting step, some variables are introduced to the data that is gathered in an aggregated manner. To introduce the smoothed effect of lock-down, index of days between mid-March till June 2020 is subtracted from the last index in this interval is copied into a column, leaving other dates as 0. It was discussed that the lock-down period have contributed to a decrease in the levels of electricity consumption and that this effect has become less pronounced over time. Therefore, the subtraction refers to this smoothing. 
+
+Moreover, although the special days have been discussed before, the exact effects of these days have not been examined. To see whether the consumption is actually decreased or maybe increased in these days the observations are sorted with respect to consumption in a non-decreasing fashion,
+
+```{r, include=TRUE, echo=FALSE}
+head(daily_data%>%filter(Date<"2021-01-29")%>%arrange(Consumption)%>%select(Date, Consumption),8)
+```
+
+From these few observations the effect of lockdown on the amount of electricity consumption is clear. There are also some days from 2019 that are coinciding with a religious holiday. Once the same procedure is carried out with excluding observations after 1st January 2020,
+
+```{r, include=TRUE, echo=FALSE}
+head(daily_data%>%filter(Date<"2020-01-01")%>%arrange(Consumption)%>%select(Date, Consumption),10)
+```
+
+It is obvious that there is a decrease in the consumption levels in special days. When the days with highest amount of consumed energy is obtained,
+
+```{r, include=TRUE, echo=FALSE}
+tail(daily_data%>%filter(Date<"2020-01-01")%>%arrange(Consumption)%>%select(Date, Consumption),10)
+```
+
+It can be commented that the consumption levels hit a peak in the late July and August, the calendar effects in Turkey may not contribute to much increase in consumption. As a result treating the holidays as a single type of special day for simplicity can be suitable. So, special days including national and religious holidays and probable days that are given as holidays because of a long enough holiday in same week such as a Friday after a three day holiday is marked with a binary indicator variable. Adding day of week and the month of year along with special days and smoothed lockdown effect the model is,
+
+```{r, include=TRUE, echo=FALSE}
+daily_data[1496, Consumption:=Consumption+108000]
+daily_data[1497, Consumption:=860000]
+
+daily_data[,Day:=wday(Date)]
+daily_data[,trend:=1:.N]
+daily_data[,covid:=0]
+daily_data[1175:1247, covid:=1247-trend]
+
+####################################################SPECIAL###############
+daily_data[,special:=0]
+daily_data[(((month(Date)==4 & day(Date)==23)|(month(Date)==5 & day(Date)==19)|(month(Date)==7 & day(Date)==15)|
+               (month(Date)==8 & day(Date)==30)|(month(Date)==10 & day(Date)==29))&Day!=1&Day!=7), special:=1]
+
+daily_data[(((month(Date)==4 & day(Date)==24)|(month(Date)==5 & day(Date)==20)|(month(Date)==7 & day(Date)==16)|
+               (month(Date)==8 & day(Date)==31)|(month(Date)==10 & day(Date)==30))&Day==6), special:=1]
+
+daily_data[(((month(Date)==4 & day(Date)==22)|(month(Date)==5 & day(Date)==18)|(month(Date)==7 & day(Date)==14)|
+               (month(Date)==8 & day(Date)==29)|(month(Date)==10 & day(Date)==28))&Day==2), special:=1]
+
+daily_data[(((month(Date)==6 & day(Date)==26)|(month(Date)==6 & day(Date)==27)|(month(Date)==8 & day(Date)==31)|
+               (month(Date)==9 & day(Date)==1)|(month(Date)==9 & day(Date)==1))&Day!=1&Day!=7&year(Date)==2017), special:=1]
+
+daily_data[(((month(Date)==6 & day(Date)==14)|(month(Date)==6 & day(Date)==15)|(month(Date)==8 & day(Date)==20)|
+               (month(Date)==8 & day(Date)==21)|(month(Date)==8 & day(Date)==22)|(month(Date)==8 & day(Date)==23)|
+               (month(Date)==8 & day(Date)==24))&Day!=1&Day!=7&year(Date)==2018), special:=1]
+
+daily_data[(((month(Date)==6 & day(Date)==3)|(month(Date)==6 & day(Date)==4)|(month(Date)==6 & day(Date)==5)|
+               (month(Date)==6 & day(Date)==6)|(month(Date)==6 & day(Date)==7)|(month(Date)==8 & day(Date)==12)|
+               (month(Date)==8 & day(Date)==13)|(month(Date)==8 & day(Date)==14))&Day!=1&Day!=7&year(Date)==2019), special:=1]
+daily_data[(((month(Date)==5 & day(Date)==25)|(month(Date)==5 & day(Date)==26)|(month(Date)==7 & day(Date)==30)|
+               (month(Date)==7 & day(Date)==31)|(month(Date)==8 & day(Date)==8))&Day!=1&Day!=7&year(Date)==2020), special:=1]
+daily_data[(month(Date)==1&day(Date)==1)&Day!=1&Day!=7, special:=1]
+daily_data[(((month(Date)==9 & day(Date)==2)|(month(Date)==9 & day(Date)==3)|(month(Date)==9 & day(Date)==4)|
+               (month(Date)==6 & day(Date)==24)|(month(Date)==6 & day(Date)==25))&year(Date)==2017), special:=1]
+daily_data[(((month(Date)==8 & day(Date)==25)|
+               (month(Date)==6 & day(Date)==16)|(month(Date)==6 & day(Date)==17))&year(Date)==2018), special:=1]
+
+daily_data[(((month(Date)==8 & day(Date)==10)|(month(Date)==8 & day(Date)==11))&year(Date)==2019), special:=1]
+daily_data[(((month(Date)==8 & day(Date)==1)|(month(Date)==8 & day(Date)==2)|(month(Date)==8 & day(Date)==3)|
+               (month(Date)==5 & day(Date)==23)|(month(Date)==5 & day(Date)==24))&year(Date)==2020), special:=1]
+daily_data[(day(Date)>=20 & day(Date)<25 & month(Date)==8 & year(Date)==2018), special:=1]
+summary((lm(Consumption~as.factor(month(Date)) + as.factor(Day) + covid + special, daily_data%>%filter(Date<"2021-01-29"))))
+```
+
+Although all predictors are shown to be significant, it is suspected if it would be a better choice to add the effect of lock-down as an indicator variable since increases in consumption levels at the end of this season might also be the result of transition to summer time as it happens in all years,
+
+```{r, include=TRUE, echo=FALSE}
+daily_data[,covid:=0]
+daily_data[1175:1247,covid:=1]
+summary((lm(Consumption~as.factor(month(Date)) + as.factor(Day) + covid + special, daily_data%>%filter(Date<"2021-01-29"))))
+```
+
+This model seems to be a better fit with decreased residual standard error. When residuals are checked,
+
+```{r, include=TRUE, echo=FALSE}
+checkresiduals((lm(Consumption~as.factor(month(Date)) + as.factor(Day) + covid + special, daily_data%>%filter(Date<"2021-01-29"))))
+```
+
+It can be observed that although the residuals are a good fit to the normal distribution there are some problems with increasing trend in residuals and high extent of positive auto-correlation in the errors. These indicate that there are some more information that is left in the residuals which can be reflected in the model. The serial correlation will be discussed in the coming parts but to model the trend the index of the day is added as a predictor to the model,
+
+```{r, include=TRUE, echo=FALSE}
+gg = (lm(Consumption~as.factor(month(Date)) + as.factor(Day) + trend + covid + special, daily_data%>%filter(Date<"2021-01-29")))
+summary(gg)
+```
+
+As can be seen from the decrease in the residual standard errors, the addition of trend have increased the training performance of the model. The increase in consumption levels might be a result of increasing number of facilities and organizations or activities using the technology. However it is surprising to see this effect being reflected in a few years span. When residuals of the model is checked,
+
+```{r, include=TRUE, echo=FALSE}
+checkresiduals(gg)
+```
+
+The only problem with errors seem to be the high amount of positive correlation in most of the lags. However, before discussing this situation it can be a better idea to observe the relation between the residuals and special aggregations of temperature recordings from the given cities to check if there is any additional information that the residuals may incorporate that can be imposed onto the model. Some aggregations of temperature are the minimum and maximum temperature in the day from one of the centers, the difference between these two observations, the average temperature of the day, the average temperature in the hottest city and the average temperature in the coldest city.
+
+Before visualizing any relation, it should be noted that there are two important factors that may be misleading in the interpretation of the aggregated temperature recordings. One factor is that the temperatures were provided using Celsius, however as in winter temperature levels hit below zero they change sign and such behavior might impair the performance of the correlation coefficient of any predictor variable related to temperature. Or, a correlation that is actually statistically significant might be demonstrated as not significant in the model because of the change in behavior arising from the change in sign. Therefore, all aggregated observations of temperature are converted into absolute temperature by adding 273, insuring that any misleading factor is eliminated and the relative differences in temperature have stayed constant. Another important point regarding the interpretation of temperature observations is the change in effects of increase or decrease in temperature to the amount of electricity consumed. From the plots visualized before, it has been obvious that the lowest levels are attained on the spring and autumn in which the temperature levels do not require any air conditioning. Whereas in winter and summer as these devices that use a lot of electricity are highly utilized because of different causes. Hence, an increase in temperature may decrease the usage of devices using electricity in winter, while this behavior usually contributes to an increase in the level of consumption in summer. As can be understood from this example, it should be more sensible to visualize or inspect the effect of temperature to the residuals with varying the months. 
+
+```{r, include=TRUE, echo=FALSE}
+daily_data[Date<"2021-01-29",res:=residuals(gg)]
+daily_data[,tmin:=tmin+273]
+daily_data[,t_avg_min:=t_avg_min+273]
+daily_data[,tmax:=tmax+273]
+daily_data[,t_avg_max:=t_avg_max+273]
+daily_data[,tavg:=tavg+273]
+daily_data[,tdiff:=tdiff+273]
+```
+
+Keeping all these in mind, when the maximum temperature versus the residuals of the model before is visualized,
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+ggplot(daily_data, aes(x=tmax, y=res, color=as.character(month(Date)))) +
+  geom_point(stat='identity') + theme_classic() +
+  labs(title = "Maximum Temperature Recorded in the Day versus Residual of the Model", 
+       x = "Max Temperature in Absolute Degrees",
+       y = "Residual (mWh)") +
+  facet_wrap(~month(Date), ncol=4)
+```
+
+From this visualization it is revealed that in some months the maximum temperature levels affect the consumption of electricity in a positive or negative manner. However, for the first few months of the year the effects do not seem to be much strong. So investigating for a more comprehensive variable should be practical. Once the difference in temperature is shown versus the residuals,
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+ggplot(daily_data, aes(x=tdiff, y=res, color=as.character(month(Date)))) +
+  geom_point(stat='identity') + theme_classic() +
+  labs(title = "Difference in Temperature Recorded in the Day versus Residual of the Model", 
+       x = "Difference of Temperature in Absolute Degrees",
+       y = "Residual (mWh)") +
+  facet_wrap(~month(Date), ncol=4)
+```
+
+These plots do not reveal any correspondence between the variable and the residuals. This may have happened because the minimum recording of temperature in a day can have an influence on the electricity consumption similar to the maximum recording. Since average temperature in the hottest and coldest centers may overlap with the minimum and maximum recordings in some degree, examining the relationship between average level of temperature and residuals can be more beneficial,
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+ggplot(daily_data, aes(x=tavg, y=res, color=as.character(month(Date)))) +
+  geom_point(stat='identity') + theme_classic() +
+  labs(title = "Average Temperature Recorded in the Day versus Residual of the Model", 
+       x = "Mean Temperature in Absolute Degrees",
+       y = "Residual (mWh)") +
+  facet_wrap(~month(Date), ncol=4)
+```
+
+This regressor variable may be more useful since there is a revealed correlation between the variable and the regressor in more than half of the months. Since the relation in some months are ambiguous from the plot, it might be a better idea to check for the correlation coefficient,
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+finish = data.table(Month=seq(1,12,by=1), Correlation=rep(0,12))
+for(i in 1:12){
+temporary=daily_data%>% filter(month(Date)==i & Date <"2021-01-29")
+corr=cor(temporary$tavg,temporary$Consumption)
+finish[Month==i, Correlation:=corr]
+}
+
+print(finish)
+```
+
+These outputs indicate that there is a considerable extent of correlation between two measures in May, September and November. However for better performance in the testing period, although the coefficients are somehow small, the predictor variables for average temperature in months February and March are also decided to be added to the model. Furthermore, the positive correlation between the average temperature level and the residuals of the first model has been visualized for June and July in the previous plot. Hence, it is surprising to observe a small correlation coefficient. Such behavior might have happened because of the left outliers coming from religious and national holidays that have been usually occurring in these months. Consequently, constructing a model including predictor variable of average temperature for these months can be tried to eliminate the predictors if they do not show to be statistically significant. Lastly, as can be guessed from the plot and by further investigation the level of temperature added as a predictor for May only if the recording is above 290 corresponding to 27 Celsius degrees, a hot weather that may require air conditioning! Although the missing relationship is predictable for some months in spring and fall since the weather is not too cold not too warm, such missing behavior is unexpected for December and January which are usually the coldest months of the year. Nonetheless, when a model is built with separate average temperature predictors of February, March, May, June, July, September and November,
+
+```{r, include=TRUE, echo=FALSE}
+daily_data[,tavg2:=0]
+daily_data[,tavg3:=0]
+daily_data[,tavg5:=0]
+daily_data[,tavg6:=0]
+daily_data[,tavg7:=0]
+daily_data[,tavg9:=0]
+daily_data[,tavg11:=0]
+daily_data[month(Date)==2, tavg2:=tavg]
+daily_data[month(Date)==3, tavg3:=tavg]
+daily_data[month(Date)==5 & tavg>290, tavg5:=tavg]
+daily_data[month(Date)==6, tavg6:=tavg]
+daily_data[month(Date)==7, tavg7:=tavg]
+daily_data[month(Date)==9, tavg9:=tavg]
+daily_data[month(Date)==11, tavg11:=tavg]
+
+
+gg2 = (lm(Consumption~as.factor(month(Date)) + as.factor(Day) + trend +
+            covid + special + tavg2 + tavg3 + tavg5 + tavg6 + tavg7 +
+            tavg9 + tavg11, daily_data%>%filter(Date<"2021-01-29")))
+```
+
+```{r, include=TRUE, echo=FALSE}
+summary(gg2)
+```
+
+The model is highly improved compared to the previous model with all predictors showing to be statistically significant. Furthermore, although some are close, most of the coefficients are considerably different from each other indicating the power introduced by differencing the regressor with respect to the months. When residuals of the model is checked,
+
+```{r, include=TRUE, echo=FALSE}
+checkresiduals(gg2)
+```
+
+The same assumptions and problems with the previous model are present. After that point, to reduce the auto-correlation between the residual errors the residuals of from two or seven days before can be added on top of the forecast of the day smoothed by some constant found via automated regression function. Two days are selected because it is the closest proximity to the day to be forecasted in an actual forecasting setting for this problem. However, adding the residuals by smoothing or maybe amplifying with the same coefficient might be misleading. To illustrate this problem, in such a setting the residual of Tuesday is added on top of the forecast of the Thursday, two days that have similar consumption profiles and amounts. Whereas when the residual from Sunday is thought, it is added to the forecast of Tuesday, two days that have considerably different behavior in consumption. To prevent this problem, there are two possible measures that are derived. Firstly, adding the residuals at lag 2 for each separate day of the week might be useful since the effects can be consistent with respect to two days considered. Secondly, for those days in which the residual from two days before is proven to be not statistically significant, residuals of the same day from previous week can be used which may eliminate the different characteristics of the days on lag. Nevertheless, the residuals do not seem to be additionally correlated at lag 7, so addition of residual from lag 2 will be tried first and if there is any problem with the predictors regressor from lag 7 will be added for that day instead of the one from lag 2. When the model is built by the first scenario,
+
+```{r, include=TRUE, echo=FALSE}
+daily_data[Date<"2021-01-29", res:=residuals(gg2)]
+daily_data[,residual:=res]
+residual_add(daily_data)
+
+gg3 = (lm(Consumption~as.factor(month(Date)) + as.factor(Day) + trend +
+            covid + special + tavg2 + tavg3 + tavg5 + tavg6 + tavg7 +
+            tavg9 + tavg11 + lag2_mon + lag2_tue + lag2_wed + lag2_thu +
+            lag2_fri + lag2_sat + lag2_sun, daily_data%>%filter(Date<"2021-01-29")))
+```
+
+```{r, include=TRUE, echo=FALSE}
+summary(gg3)
+```
+
+As can be seen from the increase in r-squared and the decrease in residual standard error, the model’s training performance have been improved. All predictors are statistically significant and differencing the residuals with respect to days have been a more efficient idea for some of the days as can be understood from the difference in coefficients. When the residuals of the model is checked,
+
+```{r, include=TRUE, echo=FALSE}
+checkresiduals(gg3)
+```
+
+The residuals are still a nearly perfect fit for normal distribution with a few outliers in the left tail. Moreover, the serial correlation at all lags after 1 seem to be decreased to nearly non-statistically significant levels. Lastly, the outliers still existing in the residuals can be dealt with. It should be kept in mind that the reasons underlying the exceptional behavior of these observations are not covered by the researchers. These might be some holidays that may have left from the eye or another special day that are not known by the researchers, maybe big holidays affecting a community or important examination days. Nevertheless, to improve the model’s performance those days are treated as outliers and indicator variables indicating whether a day is big or small outlier or in normal behavior is added to the model. It can be noted that the days with residuals till the 0.07 quantile are denoted as small outliers and the days with residuals after the 0.93 quantile are denoted as large outliers. The choice of boundaries are not much detailed and they might be up to the user or researchers in another study. When a model is constructed that way,
+
+```{r, include=TRUE, echo=FALSE}
+daily_data[,residual:=0]
+daily_data[Date<"2021-01-29" & Date>"2017-01-02", residual:=residuals(gg3)]
+
+daily_data[Date<"2021-01-29" & Date>"2017-01-02",quant7:=quantile(residual,0.07)]
+daily_data[Date<"2021-01-29" & Date>"2017-01-02",quant93:=quantile(residual,0.93)]
+
+##temp[residual2>quant95]
+daily_data[,outlier_small:=0]
+daily_data[,outlier_large:=0]
+daily_data[residual<quantile(residual,0.07) & Date > "2017-01-02",outlier_small:=1]
+daily_data[residual>quantile(residual,0.93) & Date > "2017-01-02",outlier_large:=1]
+
+gg4 = (lm(Consumption~as.factor(month(Date)) + as.factor(Day) + trend +
+            covid + special + tavg2 + tavg3 + tavg5 + tavg6 + tavg7 +
+            tavg9 + tavg11 + lag2_mon + lag2_tue + lag2_wed + lag2_thu +
+            lag2_fri + lag2_sat + lag2_sun + outlier_small + outlier_large,
+          daily_data%>%filter(Date<"2021-01-29")))
+```
+
+```{r, include=TRUE, echo=FALSE}
+summary(gg4)
+```
+
+It can be seen that addition of these variables contributed to a jump in the performance of the model as the coefficients for normal days are probably better adjusted since the effect of outliers are modelled. Once residuals are checked,
+
+```{r, include=TRUE, echo=FALSE}
+checkresiduals(gg4)
+```
+
+The variance in the residuals have decreased. The model’s residuals are a good fit for normal distribution and excluding the auto-correlation at lag 1, the residuals are not serially correlated. This model can be used as a final model. However, it can be checked whether any prediction in behavior can be attained by ARIMA,
+
+```{r, include=TRUE, echo=FALSE}
+daily_data[Date<"2021-01-29" & Date>"2017-01-02", residual:=residuals(gg4)]
+auto.arima(daily_data[3:1489,residual],seasonal = FALSE)
+```
+
+The only component is moving average at 1, however as the forecasting setting is limiting the possibility to use any info from the day the forecast is provided, use of ARIMA does not provide additional improvement to the model, at least not in the forecasting side. 
+
+After a suitable model has been found, the distribution of the consumption percentages to 24 hours of the day is another task that can be handled before testing the model. As a practical approach, a matrix filled with percentages from 24 hours of 7 days of week is found to be useful. However, it should be kept in mind that the consumption characteristics may vary from season to season just like it is proven to vary by the day of the week. One such contributor to the difference can be the reduced sunshine duration in winter time that have become more pronounced by the country deciding not to change time zones during the spring and autumn. Since the sun has not been risen when people are commuting to work or school during winter, more electricity is consumed just to lighten the streets which may be a huge contributor of the demand. Because of such reasons, the profiles of hours in a day may differ with season. Hence, as the test period is mostly in February, the matrix discussed before have been created by taking the averages of consumption percentage of hours observed in February in the data. Another assumption constructing this 7 vectors of percentages is that the percentages of consumption distributed to hours have reached to its steady state distribution over time. To check with this claim in the testing period, performance of the model for both daily series and hourly series will be analyzed and discussed using some well-known metrics.
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+daily_data[3:1489,fitted:=fitted(gg4)]
+
+temp = data%>%filter(Date<"2021-01-29")
+hour_day = matrix(NA, 24, 7)
+for(i in 0:23){
+  for(j in 1:7){
+    hour_day[i+1,j] = mean(temp[Hour==i & wday(Date)==j]$percent)
+  }
+}
+data[,fitted:=0]
+train_per = seq.Date(ymd("2017-01-03"), ymd("2021-01-28"), by=1)
+for(i in 1:1487){
+  for(j in 0:23){
+    cons = daily_data[Date==train_per[i], fitted] * hour_day[j+1, wday(train_per[i])]
+    data[Date==train_per[i] & Hour == j, fitted:=cons]
+  }
+}
+data[,error:=0]
+data[Date>"2017-01-01" & Date<"2021-01-29",error:=Consumption-fitted]
+
+hour_day_feb = matrix(NA, 24, 7)
+for(i in 0:23){
+  for(j in 1:7){
+    hour_day_feb[i+1,j] = mean(data[Hour==i & wday(Date)==j & month(Date)==2 & year(Date)<2021]$percent)
+  }
+}
+
+```
+
+Before testing, it might be useful to transfer the fitted values for daily consumption to hourly fitted amounts. Although it was mentioned that each month or season can require its own vector of percentages, an averaged vector utilizing percentages from 2017-2021 is used for this transfer to reduce the complexity. It should be kept in mind that the actual distribution model might probably be better at handling residuals that will be visualized now,
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(data%>%filter(Date<"2021-01-29" & Date>"2017-01-02"), aes(x=index, y=error)) +
+  geom_line(size = 0.3, color="lightsalmon") +
+  labs(title = "Hourly Errors of the Base Fitted Model", 
+       x = "Date Index",
+       y = "Hourly Error in Consumed Electricity (mWh)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+This distribution of residuals seem stationary with changing variances at some time intervals, this problem might have caused by using the same percent vector for all seasons as more similar errors can be committed for observations in the same season. There are actually much more analysis that can be carried out with residuals such as plotting residuals versus some of the predictors. However, since the model will be tested on a test period, a part of these useful analyses will be executed using the test data.
+
+## Results
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+forecastDays = seq.Date(ymd("2021-01-30"), ymd("2021-02-12"), 1)
+days_forecast = daily_data%>%select(Date, Consumption, tavg)%>%filter(Date%in%forecastDays)
+days_forecast[,Forecast:=0]
+days_forecast[,residual:=0]
+
+data[,t_hour_avg:=(T_1 + T_2 + T_3 + T_4 + T_5 + T_6 + T_7)/7, by= Date+Hour]
+hours_forecast = data%>%select(Date, Hour, Consumption, t_avg, t_hour_avg)%>%filter(Date%in%forecastDays)
+hours_forecast[,Forecast:=0]
+hours_forecast[,residual:=0]
+hours_forecast = hours_forecast%>%arrange(Date, Hour)
+
+daily_loop = daily_data%>%select(Date, Consumption, Day, trend, covid, special, tavg, tavg2, tavg3, tavg5, tavg6, tavg7, tavg9, tavg11)
+
+for(i in 1:14){
+daily_loop2 = daily_loop%>%filter(Date<=forecastDays[i])
+
+
+gg_loop = lm(Consumption~as.factor(month(Date)) + as.factor(Day) + trend +
+                covid + special + tavg2 + tavg3 + tavg5 + tavg6 + tavg7 +
+                tavg9 + tavg11, daily_loop2%>%filter(Date<forecastDays[i]-1))
+
+daily_loop2[Date<forecastDays[i]-1,residual:=residuals(gg_loop)]
+residual_add(daily_loop2)
+
+gg_loop2 = lm(Consumption~as.factor(month(Date)) + as.factor(Day) + trend +
+            covid + special + tavg2 + tavg3 + tavg5 + tavg6 + tavg7 +
+            tavg9 + tavg11 + lag2_mon + lag2_tue + lag2_wed + lag2_thu +
+            lag2_fri + lag2_sat + lag2_sun, daily_loop2%>%filter(Date<forecastDays[i]-1))
+
+
+daily_loop2[,residual:=0]
+daily_loop2[Date<forecastDays[i]-1 & Date>"2017-01-02", residual:=residuals(gg_loop2)]
+
+daily_loop2[Date<forecastDays[i]-1 & Date>"2017-01-02",quant7:=quantile(residual,0.07)]
+daily_loop2[Date<forecastDays[i]-1 & Date>"2017-01-02",quant93:=quantile(residual,0.93)]
+
+daily_loop2[,outlier_small:=0]
+daily_loop2[,outlier_large:=0]
+daily_loop2[residual<quantile(residual,0.07) & Date > "2017-01-02" & Date<forecastDays[i],outlier_small:=1]
+daily_loop2[residual>quantile(residual,0.93) & Date > "2017-01-02" & Date<forecastDays[i],outlier_large:=1]
+
+gg_loop3 = lm(Consumption~as.factor(month(Date)) + as.factor(Day) + trend +
+            covid + special + tavg2 + tavg3 + tavg5 + tavg6 + tavg7 +
+            tavg9 + tavg11 + lag2_mon + lag2_tue + lag2_wed + lag2_thu +
+            lag2_fri + lag2_sat + lag2_sun + outlier_small + outlier_large,
+          daily_loop2%>%filter(Date<forecastDays[i]-1))
+
+daily_loop2[Date<forecastDays[i]-1 & Date>"2017-01-02",fit:=fitted(gg_loop3)]
+daily_loop2[is.na(fit)==T,fit:=predict(gg_loop3, daily_loop2[is.na(fit)==T])]
+
+days_forecast[i,Forecast := daily_loop2[Date==forecastDays[i], fit]] 
+
+for(j in 0:23){
+multiplier = hour_day_feb[j+1,wday(forecastDays[i])]
+total = daily_loop2[Date==forecastDays[i], fit]
+hours_forecast[Date==forecastDays[i] & Hour==j, Forecast := unlist(as.double(multiplier * total))]
+}
+}
+
+days_forecast[,residual:=Consumption-Forecast]
+hours_forecast[,residual:=Consumption-Forecast]
+
+```
+
+When the model with same predictors has been constructed repeatedly in a loop while updating the data set, the accuracy of the daily forecasts for the 2 week period is,
+
+```{r, include=TRUE, echo=FALSE}
+accuracy(days_forecast$Consumption, days_forecast$residual)
+```
+
+WMAPE is around %2.5 and FBias is very close to zero, indicating that the model do not over or under predict and the residuals are scattered around zero. The model seems to be adequate since in the study of Deb et al. (2017) accuracy MAPEs of various popular techniques that are used for same job are listed to be between %1 and %2. However, as mentioned before, there could have been some misleading factors while converting the daily forecast to hourly forecasts so if the accuracy of the hourly forecasts are to be checked,
+
+```{r, include=TRUE, echo=FALSE}
+accuracy(hours_forecast$Consumption, hours_forecast$residual)
+```
+
+It can be seen that the MAPE and WMAPE values are between %2.5 and %3. This behavior demonstrates that, not much information is lost while partitioning the forecasts. Moreover, it can be natural for accuracy to worsen while predicting hourly series because of the additional degree of details involved. Although the metrics are compared with respect to some popular techniques in the literature, it should be useful to develop a baseline model to show the amount of the improvement attained by the linear regression developed. If a baseline model, using the consumption from 168 hours before, that is a week, is used as a forecasting model,
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+baseline = data %>% filter(Date>"2021-01-22" & Date<"2021-02-13") %>% select(Date, Hour, Consumption)%>% arrange(Date, Hour)
+baseline[,lag168:=shift(Consumption,168)]
+baseline = baseline%>%filter(Date>"2021-01-29" & Date<"2021-02-13")%>%arrange(Date, Hour)
+baseline[,residual:=Consumption-lag168]
+
+accuracy(baseline$Consumption, baseline$residual)
+```
+
+As can be seen, the MAPE and WMAPE values of the baseline method is approximately around %4. It can be said that the model provided additional information and practicality in forecasting the hourly consumption of electricity in Turkey. If the predicted versus actual consumption values are visualized,
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+hours_forecast[,index:=1:.N]
+
+cols = c("Forecast" = "blue", "Consumption" = "lightcoral")
+ggplot() +
+  geom_line(data=hours_forecast, aes(x=index, y=Forecast, color="Forecast"), lwd=1) +
+  geom_line(data=hours_forecast, aes(x=index, y=Consumption, color="Consumption"), lwd=1) +
+  labs(title = "Predicted vs. Actual Hourly Electricity Consumption in Turkey", 
+       x = "Date Index",
+       y = "Consumption (mWh)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_manual(values = cols)
+```
+
+It is obvious that there are some problems with the forecasting methodology. Some of the most sparkling ones can be listed as the inadequacy of the model in predicting the unexpectedly high consumption amounts, failure to grasp the consumption percentages of the hours in a day and forecasting a misleadingly high amount of consumption on a Saturday. The possible reasons and solutions to some of these problems will be mentioned along with other possible shortcomings of the model in the next section. For now, if the residuals in the test period is plotted over the time,
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(hours_forecast, aes(x=index, y=residual)) +
+  geom_line(size = 1, color="lightslateblue") +
+  labs(title = "Hourly Residuals of the Proposed Model in Test Period", 
+       x = "Date Index",
+       y = "Hourly Residual from Consumed Electricity (mWh)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Though it was stated that the FBias imply that on average the model do not over or under predict, from this plot it is visible that the behavior of under or over predicting is clustered to specific times. It can be argued that there are some problems with the residuals especially from the first week as most of the time the model under predicted the realized consumption amount. From the previous plot since the profile of days are obvious, it can be claimed that most of this under predicting behavior occurred after the midday. Hence, it can be stated that most of the peaks visible in the plot of residuals are from the noon and afternoon hours of the day. In fact if residuals are drawn with respect to the hours,
+
+```{r, include=TRUE, echo=FALSE}
+mycolors <- colorRampPalette(brewer.pal(8, "Paired"))(24)
+ggplot(hours_forecast, aes(x=Hour, y=residual, group=Hour)) +
+  geom_boxplot(aes(fill= factor(Hour))) +
+  scale_fill_manual(values = mycolors, name = "Hours") +
+  labs(title = "Boxplots of Residuals of the Model Grouped Hourly", 
+       x = "Hours of Day",
+       y = "Amount of Residual (mWh)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+This box plot of residuals scattered into hours displays the problems associated with prediction in noon and afternoon. As obvious from the plot, there are the model has tended to predict less than the realized consumption in hours between 10 and 15. Although there are problems associated with other hours too, it should be noted that no prediction is perfect. Lastly, if residuals versus the average temperature in that hour is visualized, 
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(hours_forecast, aes(x=t_hour_avg, y=residual, color=as.character(Hour))) +
+  geom_point(stat='identity') + theme_classic()+
+  labs(title = "Scatter Plot of Residuals of the Model vs. Average Temperature in the Hour", 
+       x = "Average Temperature in Celsius",
+       y = "Residual (mWh)") 
+```
+
+As obvious from the plot, there can be a weak correlation between the two measures. This is actually interesting because in winter time, it is not expected for temperature to be positively correlated with the electricity consumption. Nonetheless, the relation might be a result of another third measure that is not introduced in the model as most of the time the warmest hours in winter are around the noon, the interval in which the model performed poorly. However, it can still be suggested that use of hourly average of temperature could bring some improvement to the model.
+
+## Conclusion and Future Works
+
+It is discussed before that there are some problems involved with the model. While some of these problems might have influenced the performance of the model in the test period, there can also be shortcomings of the model that have not been reflected in the results. The inefficiencies of the model can be separated into two categories stemming from various reasons. One category involves problematic behaviors introduced by the distribution of hourly electricity consumption, whereas the other category includes the problems caused by inadequate or misleading explanation of variation in the series in the linear regression model.
+
+The problems involved with partitioning of hourly percentages may have resulted from several different reasons. It is argued before that the temperature levels do not only affect the daily amount of consumed electricity but also the hourly distributions. Since the effect of temperature is reflected in the model for approximately half of the months, it can be claimed that this addition might be able to grasp the relationship between the hourly consumption levels and the temperature. However, a simple example can oppose this argument. In the winter time, people tend to close or reduce the heating in night hours when the difference in temperature between afternoons and nights are not much high. There might be observed both kind of days, some demonstrating this kind of behavior and some showing a gradual difference in temperature levels between day and night. Although a similar scenario may apply for the summer with air conditioners, such effects can be missing in relatively warm weathers in spring or autumn which may change the hourly profiles in a day. Hence, it can be claimed that the effect of temperature is not the same for all hours in a day and its effect vary with seasons furthermore there might be days with different profiles in the same season. Though not related to temperature levels, a similar case may apply for the hourly profiles in holidays since one of the main contributors of consumption in working hours will be missing, namely the industrial production. Owing to all these reasons, it can be stated that aggregating the hourly percentages of amount of consumed electricity only based on the past data, months and day of the week might be misleading or inadequate in some ways. Although modelling the total consumption in a day is a more practical approach, fine tuning the hourly percentages is a down side of this technique. It is obvious that with better adjusted hourly percentages taking hourly temperature recordings and special features of the day, the model might perform better. However, this may of course require an additional workload which may impair the practicality and ease of use offered by the model before.
+
+There are also some problematic behaviors in the linear regression model constructed. As observed before, the model has been unable to predict high electricity consumption levels in the test period. There might be different reasons contributing to this inadequacy of the model. One of the possible reasons is the missing temperature information for the month January. Nonetheless, when the residuals are analyzed, it can be seen that this under predicting behavior has took place in February more seriously than the January. As a result, it can be stated that there are additional information that are missing to the model. Although the average of the temperature observations has been a predictor for February in the model, the recording is a representative of only 7 cities from the Turkey. If the temperature information of Turkey in the first week of February 2021 is checked for more centers, it can be observed that there is an important number of cities with lower temperature levels compared to the second week of February or the average temperature levels of this winter. Hence, it can be argued that the model is not able to fully grasp the temperature information leading to problems when temperature levels hit more extreme values. 
+
+As can be understood from this discussion, more detailed analysis with hourly percentages based on the type of the day and hourly temperature info can be considered as a future addition to the model.  Moreover, temperature information from more centers can be used with giving city specific weights to each observation as temperatures recordings in cities with more population, industrial development and tourism may become more important factors determining the total consumption of Turkey. Another future improvement to the model can be introduced by trying different aggregations of temperature observations for different days with different characteristics as consumption levels might be more influenced by day night difference in temperature on some days or centers while being more affected by the average value of temperature in periods or cities. Lastly, for the proposed approach, modelling special days via more detailed examinations or variation in the types of the special days based on the consumption profiles might increase the efficiency of the model. Nevertheless, it should be kept in mind that these proposed methods might call for additional detailed examination of the data or related data with more advanced tools. 
+
+All in all, it can be said that predicting hourly electricity consumption is a popular problem in literature with a wide range of possible approaches as linear regression is one of them. It can be claimed that linear regression of the daily load benefiting from trend, seasonality and auto regressive factors bring some additional improvement to baseline solutions. Moreover, the model might have become more practical and easy to use by incorporating the calendar and temperature effects compared to the time series models. Nonetheless, some deficiencies in the proposed model can be listed as inadequate attention dedicated to aggregations of temperature and effects of temperatures on the hourly percentages as well as lack of detailed analysis and differentiation for the special days. Although it is for sure that at least some of these additions will improve the performance of the model, it should be kept in mind that almost all require more detailed analysis. Hence, it can be stated that the proposed model is a useful method that is time and work load efficient in forecasting the hourly electricity demand.
+
+## References
+
+[Shah, İ. , Iftikhar, H. , Ali, S. , Wang, D. (2019). Short-Term Electricity Demand Forecasting Using Components Estimation Technique](https://www.mdpi.com/1996-1073/12/13/2532/htm)
+
+[Tepedino, C. , Popova, S. B. , Guarnaccia, C. (2014). Time Series Analysis and Forecast of the Electricity Consumption of Local Transportation](http://www.wseas.us/e-library/conferences/2014/Florence/DEEE/DEEE-01.pdf)
+
+[Calili, R. F. , Oliveira, F. L. C. , Souza, R. C. , Araujo, T. G. , Ferreir, P. G. C. (2016). Proposal of an Empirical Method to Adjust Time Series for Calendar and Temperature Effects](https://www.scielo.br/scielo.php?pid=S0104-530X2016000400787&script=sci_arttext&tlng=en)
+
+[Chapagain, K. , Kittipiyakul, S. , Kulthanavit, P. (2020). Short-Term Electricity Demand Forecasting: Impact Analysis of Temperature for Thailand](https://www.researchgate.net/publication/341421223_Short-Term_Electricity_Demand_Forecasting_Impact_Analysis_of_Temperature_for_Thailand)
+
+[Ziel, F. (2018). Modeling Public Holidays in Load Forecasting: a German Case Study](https://link.springer.com/article/10.1007/s40565-018-0385-5)
+
+[Hodge, T. (2020). Hourly Electricity Consumption Varies Throughout the Day and Across Seasons](https://www.eia.gov/todayinenergy/detail.php?id=42915)
+
+[DiPersio L. ,  Cecchin, A. , Cordoni, F. (2017). Novel Approaches to the Energy Load Unbalance Forecasting in the Italian Electricity Market](https://www.researchgate.net/publication/315368748_Novel_approaches_to_the_energy_load_unbalance_forecasting_in_the_Italian_electricity_market)
+
+[Deb C. ,  Yang, J. , Lee S. E. , Zhang, F. (2017). A Review on Time Series Forecasting Techniques for Building Energy Consumption](https://www.researchgate.net/publication/314086599_A_review_on_time_series_forecastingtechniques_for_building_energy_consumption)
+
+##   Code
+The RMD File can be found [Here](https://bu-ie-360.github.io/fall20-edakocakarin/files/IE360Project-Group6.Rmd).
